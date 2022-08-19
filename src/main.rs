@@ -1,4 +1,4 @@
-#![warn(non_snake_case)]
+#![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
 use std::env;
@@ -11,9 +11,11 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn message(&self, _ctx: Context, _msg: Message) {
-        if false {
-            panic!();
+    async fn message(&self, ctx: Context, msg: Message) {
+        if msg.content == "sex" {
+            if let Err(why) = msg.channel_id.say(&ctx.http, "sex2").await {
+                println!("Error: {:?}", why);
+            }
         }
     }
 
@@ -22,13 +24,14 @@ impl EventHandler for Handler {
     }
 }
 
-//test
 
 #[tokio::main]
 async fn main() {
 
     let key = "TOKEN";
     env::set_var(key, "OTA5NTY3ODM3OTY0NzQ2ODYz.YZGLDw.NcBgor98gTrtdwJsdfUZRtq79gs");
+    //env::set_var("RUST_BACKTRACE", "full");
+
 
     // TODO: Add Token file
     let token: String = env::var(key)
