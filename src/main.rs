@@ -8,10 +8,10 @@ use std::{env};
 use serenity::prelude::TypeMapKey;
 use serenity::{async_trait, Client, client::*, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::{Ready}}};
 use tokio;
-use tokio::sync::Mutex;
 use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
-
+use regex::Regex;
+use rustube;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -38,7 +38,7 @@ const SET_RESPONSE: &str = "New video set!";
 // Enum Declaration 
 
 
-#[derive(Debug, EnumIter, Display, EnumCount)]
+#[derive(Debug, EnumIter, Display, EnumCount, PartialEq)]
 enum COMMAND {
     E_TEST,
     E_SET,
@@ -63,17 +63,17 @@ impl EventHandler for Handler {
 
     async fn message(&self, ctx: Context, msg: Message) {
         
-        println!("Message Contains: {:?}", msg.content);
+        println!("Message Contains: {:?}", msg.content);    // Debug: Shows message contents
         
-        let command: COMMAND = checkCommand(&msg);
+        let command: COMMAND = checkCommand(&msg);          // Checks if a message is a command
 
-        test(&ctx).await;
+        if command == COMMAND::INVALID {return;}            // Returns early if there is no command
 
-        executeCommand(command, &msg, &ctx);
+        executeCommand(command, &msg, &ctx);            // Executes Commands 
 
     }
 
-    async fn ready(&self, _: Context, ready: Ready){
+    async fn ready(&self, _: Context, ready: Ready){        // Successful connection to server check
         println!("{}, Connected to Server!", ready.user.name);
     }
 }
@@ -85,11 +85,21 @@ impl TypeMapKey for User {
     type Value = HashMap<u64, String>;
 }
 
-async fn test(ctx: &Context) {
-    let mut data = ctx.data.write().await;
-    let counter = data.get_mut::<User>().unwrap();
-    counter.insert(102984572, "Sex".to_string());
-    println!("{:?}", counter);
+async fn insert_user(ctx: &Context, _msg: &Message) {  
+    let mut u_data = ctx.data.write().await;            // Waits for Lock Queue on write command and then proceeds with execution 
+    let u_map = u_data.get_mut::<User>().unwrap();    // Gets mutable reference to the data and stores it in counter
+    
+    // Should checks pass
+    // Check for additional info
+    // Download video
+    // Trim Video
+    // Save Video and get filepath to it (user ID as title)
+    // Add the User to the Map or replace their filepath (map value)
+
+
+
+    u_map.insert(12313123123, "Sex".to_string());                             // Inserts Element into Map
+    println!("{:?}", u_map);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -122,14 +132,25 @@ fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
 
     match cmd {
         COMMAND::E_TEST => println!("Test!"),
-        COMMAND::E_SET => println!("Putis Function here"),
-        COMMAND::INVALID => (),
+        COMMAND::E_SET => userMapCheckAndUpdate(&msg, &ctx),
+        COMMAND::INVALID => (),                                     // Should never happen but better be safe than sorry
         _ => println!("Not Implemented Yet"),
+    }
+}
+
+fn userMapCheckAndUpdate(msg: &Message, _ctx: &Context) {
+    
+    let reg: Regex = Regex::new(r"https://(?:www)?\.?youtu\.?be\.?(?:com)?/?(?:watch\?v=)?(.{11})").unwrap();
+    let mut yt: &str = msg.content.as_str().clone();
+
+    match reg.captures(yt) {
+        Some(capture) => yt = capture.get(1).unwrap().as_str(),
+        None => println!("Nothing Captured!"),
     }
 
 
-}
 
+}
 
 
 #[tokio::main]
@@ -154,8 +175,8 @@ async fn main() {
         .await
         .expect("Couldn't Create Client!");
         {
-            let mut data = client.data.write().await;
-            data.insert::<User>(HashMap::default());
+            let mut u_data = client.data.write().await;
+            u_data.insert::<User>(HashMap::default());
         }
  
     // Connects to Server
