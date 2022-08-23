@@ -11,7 +11,7 @@ use tokio;
 use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
 use regex::Regex;
-use rustube;
+use rustube::{VideoFetcher, Id};
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -33,6 +33,8 @@ static CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
 
 const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
 const SET_RESPONSE: &str = "New video set!";
+
+const YT: &str = "https://youtu.be/";
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Enum Declaration 
@@ -63,17 +65,17 @@ impl EventHandler for Handler {
 
     async fn message(&self, ctx: Context, msg: Message) {
         
-        println!("Message Contains: {:?}", msg.content);    // Debug: Shows message contents
+        println!("{} said : {:?}", msg.author, msg.content);        // Debug: Shows message contents
         
-        let command: COMMAND = checkCommand(&msg);          // Checks if a message is a command
+        let command: COMMAND = checkCommand(&msg).await;            // Checks if a message is a command
 
-        if command == COMMAND::INVALID {return;}            // Returns early if there is no command
+        if command == COMMAND::INVALID {return;}                    // Returns early if there is no command
 
-        executeCommand(command, &msg, &ctx);            // Executes Commands 
+        executeCommand(command, &msg, &ctx).await;              // Executes Commands 
 
     }
 
-    async fn ready(&self, _: Context, ready: Ready){        // Successful connection to server check
+    async fn ready(&self, _: Context, ready: Ready){                // Successful connection to server check
         println!("{}, Connected to Server!", ready.user.name);
     }
 }
@@ -84,6 +86,17 @@ struct User {}
 impl TypeMapKey for User {
     type Value = HashMap<u64, String>;
 }
+
+
+#[derive(Debug)]
+struct VidInfo {
+    name: String,       // Video name
+    v_length: u64,      // Video length          
+    start: u64,         // User start point     Default: 0
+    u_length: u64,      // Clip length          Default: 5
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
 
 async fn insert_user(ctx: &Context, _msg: &Message) {  
     let mut u_data = ctx.data.write().await;            // Waits for Lock Queue on write command and then proceeds with execution 
@@ -102,9 +115,7 @@ async fn insert_user(ctx: &Context, _msg: &Message) {
     println!("{:?}", u_map);
 }
 
-//--------------------------------------------------------------------------------------------------------------------------
-
-fn checkCommand(msg: &Message) -> COMMAND {
+async fn checkCommand(msg: &Message) -> COMMAND {
 
     // Makes sure that the enum matches the consts
     if CONSTS.len() > (COMMAND::COUNT - 1) {
@@ -128,29 +139,116 @@ fn checkCommand(msg: &Message) -> COMMAND {
     command
 } 
 
-fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
+async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
 
     match cmd {
         COMMAND::E_TEST => println!("Test!"),
-        COMMAND::E_SET => userMapCheckAndUpdate(&msg, &ctx),
+        COMMAND::E_SET => userMapCheckAndUpdate(&msg, &ctx).await,
         COMMAND::INVALID => (),                                     // Should never happen but better be safe than sorry
         _ => println!("Not Implemented Yet"),
     }
 }
 
-fn userMapCheckAndUpdate(msg: &Message, _ctx: &Context) {
+async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     
-    let reg: Regex = Regex::new(r"https://(?:www)?\.?youtu\.?be\.?(?:com)?/?(?:watch\?v=)?(.{11})").unwrap();
-    let mut yt: &str = msg.content.as_str().clone();
+    let reg: Regex = Regex::new(r"https://(?:www)?\.?youtu\.?be\.?(?:com)?/?(?:watch\?v=)?(.{11})").unwrap();   // Regex to match YouTube links (long and short urls work / YouTube Shorts don't)
+    let mut yt: String = msg.content.clone();
+    let mut vid: VidInfo = VidInfo {name: "".to_string(), v_length: 0, start: 0, u_length: 0,};
 
-    match reg.captures(yt) {
-        Some(capture) => yt = capture.get(1).unwrap().as_str(),
-        None => println!("Nothing Captured!"),
+    match reg.captures(&yt) {   // Uses Regex to capture the 11 URL characters that are important
+        Some(capture) => yt = capture.get(1).unwrap().as_str().to_string().to_owned(),  
+        None => {errHandle(msg, ctx, 0).await; return;},
     }
 
+    let id = match Id::from_str(&yt) {  // Does it again, but this time its from the api
+        Ok(T) => T,
+        Err(_E) => {errHandle(msg, ctx, 0).await; return;},
+    };
 
+    let descrambler = match VideoFetcher::from_id(id.into_owned()) // Fetches Videoinfo, should it exists
+        .unwrap()
+        .fetch()
+        .await {
+            Ok(T) => T,
+            Err(_E) => {errHandle(msg, ctx, 0).await; return;},
+        };
+
+    let info = descrambler.video_info();    // Saves video info in variable
+    vid.name = info.player_response.video_details.title.clone();
+    vid.v_length = info.player_response.video_details.length_seconds.clone();
+
+    
+    vid.start = matchStart(&msg.content.as_str(), &vid.v_length).await;
+    vid.u_length = matchLength(&msg.content.as_str(), &vid.v_length, &vid.start).await;
+
+
+    println!("{:#?}", &vid);
 
 }
+
+async fn errHandle(msg: &Message, ctx: &Context, case: u8) {
+
+    match case {
+
+        0 => if let Err(why) = msg.channel_id.say(&ctx.http, "No valid Youtube Link given!").await {
+            println!("Send Message failed. Error: {:?}", why)
+            },
+        1 => (),
+        2 => (),
+        _ => println!("Invalid Case! / Not Implemented!"),
+    }
+
+}
+
+async fn matchStart(msg: &str, v_length: &u64) -> u64 {
+
+    let start: Regex = Regex::new(r"start=([0-9]+)").unwrap();                                                  // Optional Regex to match the start point
+
+    let vid_start: u64 = match start.captures(&msg) {   
+        Some(capture) => {
+            if capture.get(1).unwrap().as_str().to_string().to_owned().clone().parse::<u64>().unwrap() >=  *v_length {
+                v_length - 2   // Checks if custom start is longer than video len, if yes assigns it to max vid length - 2
+            } else {
+                capture.get(1).unwrap().as_str().to_string().to_owned().parse::<u64>().unwrap()
+            }
+        },  
+        None => 0,  // No match == start at 0
+    };
+
+    vid_start
+}
+
+async fn matchLength(msg: &str, v_length: &u64, v_start: &u64) -> u64 {
+    
+    let length: Regex =  Regex::new(r"length=([0-9]{1,2})").unwrap();                                           // Optional Regex to match the clip length
+    
+    let u_length: u64 = match length.captures(&msg) {   
+        Some(capture) => {
+            let mut len: u64 = capture.get(1).unwrap().as_str().to_string().to_owned().clone().parse::<u64>().unwrap();
+
+            if  len > 10 { len = 10; }           // Makes sure length is in the right size bracket 
+            else if len < 1 {len = 1; }
+
+            if  len + v_start >= *v_length {
+                len = v_length - v_start;  // Checks if the custom length would go over the video length and, if appropriate, sets it to the remaining time in the video
+            } 
+
+            len
+        },  
+        None => {
+            let mut len: u64 = 5;   // Default length of 5
+
+            if v_start + len > *v_length {
+                len = v_length - v_start;
+            }
+
+            len
+        }
+    };
+
+    u_length
+}
+
 
 
 #[tokio::main]
