@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::{env};
+use std::{env, path::Path};
 
 use serenity::prelude::TypeMapKey;
 use serenity::{async_trait, Client, client::*, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::{Ready}}};
@@ -12,6 +12,8 @@ use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
 use regex::Regex;
 use rustube::{VideoFetcher, Id};
+
+mod helper;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -27,14 +29,16 @@ const WIN: &str = "$win ";
 const BAN: &str = "$ban ";
 const ULIST: &str = "$userlist ";
 
-static CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
-                                     KYS, TIMER, WIN, BAN, ULIST];
-
-
 const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
 const SET_RESPONSE: &str = "New video set!";
 
 const YT: &str = "https://youtu.be/";
+
+static CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
+                                     KYS, TIMER, WIN, BAN, ULIST];
+
+static PATH: &'static str = "/src/vid/";
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Enum Declaration 
@@ -65,7 +69,7 @@ impl EventHandler for Handler {
 
     async fn message(&self, ctx: Context, msg: Message) {
         
-        println!("{} said : {:?}", msg.author, msg.content);        // Debug: Shows message contents
+        println!("{} said : {:?}", msg.author.name, msg.content);        // Debug: Shows message contents
         
         let command: COMMAND = checkCommand(&msg).await;            // Checks if a message is a command
 
@@ -94,6 +98,7 @@ struct VidInfo {
     v_length: u64,      // Video length          
     start: u64,         // User start point     Default: 0
     u_length: u64,      // Clip length          Default: 5
+    u_id: String,       // User Id
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -102,8 +107,6 @@ async fn insert_user(ctx: &Context, _msg: &Message) {
     let mut u_data = ctx.data.write().await;            // Waits for Lock Queue on write command and then proceeds with execution 
     let u_map = u_data.get_mut::<User>().unwrap();    // Gets mutable reference to the data and stores it in counter
     
-    // Should checks pass
-    // Check for additional info
     // Download video
     // Trim Video
     // Save Video and get filepath to it (user ID as title)
@@ -115,6 +118,8 @@ async fn insert_user(ctx: &Context, _msg: &Message) {
     println!("{:?}", u_map);
 }
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Checks message against list of commands
 async fn checkCommand(msg: &Message) -> COMMAND {
 
     // Makes sure that the enum matches the consts
@@ -139,6 +144,9 @@ async fn checkCommand(msg: &Message) -> COMMAND {
     command
 } 
 
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Matches commands with the functions they should execute
 async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
 
     match cmd {
@@ -149,11 +157,22 @@ async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
     }
 }
 
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Handles most of the logic for the YouTube video detection 
 async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     
+    // Sets filepath
+    let u_name: String = helper::removeUserAt(msg.author.id.0.to_string());
+    let path: &Path = Path::new(u_name.as_str());
+
+    println!("Path to File: {:?}", path);
+
+
+    // Sets and matches YouTube Regex
     let reg: Regex = Regex::new(r"https://(?:www)?\.?youtu\.?be\.?(?:com)?/?(?:watch\?v=)?(.{11})").unwrap();   // Regex to match YouTube links (long and short urls work / YouTube Shorts don't)
     let mut yt: String = msg.content.clone();
-    let mut vid: VidInfo = VidInfo {name: "".to_string(), v_length: 0, start: 0, u_length: 0,};
+    let mut vid: VidInfo = VidInfo {name: "".to_string(), v_length: 0, start: 0, u_length: 0, u_id: "".to_string(),};
 
     match reg.captures(&yt) {   // Uses Regex to capture the 11 URL characters that are important
         Some(capture) => yt = capture.get(1).unwrap().as_str().to_string().to_owned(),  
@@ -165,6 +184,8 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
         Err(_E) => {errHandle(msg, ctx, 0).await; return;},
     };
 
+
+    // Starts a descrambler for the Video Data
     let descrambler = match VideoFetcher::from_id(id.into_owned()) // Fetches Videoinfo, should it exists
         .unwrap()
         .fetch()
@@ -174,35 +195,70 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
         };
 
     let info = descrambler.video_info();    // Saves video info in variable
+
+
+    // Saves some of the video info in a better format
     vid.name = info.player_response.video_details.title.clone();
     vid.v_length = info.player_response.video_details.length_seconds.clone();
-
-    
     vid.start = matchStart(&msg.content.as_str(), &vid.v_length).await;
     vid.u_length = matchLength(&msg.content.as_str(), &vid.v_length, &vid.start).await;
-
+    vid.u_id = msg.author.id.0.to_string().clone().replace("@", "");
 
     println!("{:#?}", &vid);
 
+
+    // Tries to download video to location
+    match descrambler
+        .descramble()
+        .unwrap()
+        .best_audio()
+        .unwrap()
+        .download_to(path)
+        .await {
+            Ok(()) => println!("Successful Download!"),
+            Err(_E) => {errHandle(msg, ctx, 1).await; return;}
+        };
+
+    match editVideo(&vid, ctx).await {
+        Ok(()) => println!("Hershey"),
+        Err(_E) => {errHandle(msg, ctx, 2).await; return;},
+    };
+
 }
 
+async fn editVideo(vid: &VidInfo, ctx: &Context) -> Result<(), &'static str> {
+
+    
+
+    Ok(())
+}
+
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Error Handler 
 async fn errHandle(msg: &Message, ctx: &Context, case: u8) {
 
-    match case {
+     let err: &str = match case {
 
-        0 => if let Err(why) = msg.channel_id.say(&ctx.http, "No valid Youtube Link given!").await {
-            println!("Send Message failed. Error: {:?}", why)
-            },
-        1 => (),
-        2 => (),
-        _ => println!("Invalid Case! / Not Implemented!"),
+        0 => "No valid Youtube Link given!",
+        1 => "Unable to downlaod Video!",
+        2 => "Unable to edit video, old video has been overwritten!",
+        _ => "Invalid Case! / Not Implemented!",
+    };
+
+    if let Err(why) = msg.channel_id.say(&ctx.http, err).await {
+        println!("Send Message failed. Error: {:?}", why)
     }
 
 }
 
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Matches custom start time for a youtube video
 async fn matchStart(msg: &str, v_length: &u64) -> u64 {
 
-    let start: Regex = Regex::new(r"start=([0-9]+)").unwrap();                                                  // Optional Regex to match the start point
+    let start: Regex = Regex::new(r"start=([0-9]+)").unwrap();              // Optional Regex to match the start point
 
     let vid_start: u64 = match start.captures(&msg) {   
         Some(capture) => {
@@ -218,9 +274,12 @@ async fn matchStart(msg: &str, v_length: &u64) -> u64 {
     vid_start
 }
 
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Matches custom length for a youtube video
 async fn matchLength(msg: &str, v_length: &u64, v_start: &u64) -> u64 {
     
-    let length: Regex =  Regex::new(r"length=([0-9]{1,2})").unwrap();                                           // Optional Regex to match the clip length
+    let length: Regex =  Regex::new(r"length=([0-9]{1,2})").unwrap();       // Optional Regex to match the clip length
     
     let u_length: u64 = match length.captures(&msg) {   
         Some(capture) => {
@@ -253,6 +312,8 @@ async fn matchLength(msg: &str, v_length: &u64, v_start: &u64) -> u64 {
 
 #[tokio::main]
 async fn main() {
+
+    env::set_var("RUST_BACKTRACE", "full");
 
     // Sets DC Token as ENV
     let key = "TOKEN";
