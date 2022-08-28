@@ -3,8 +3,12 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::{env, path::Path};
+use std::fmt::Error;
+use std::io::Write;
+use std::{fs, fs::File};
+use std::{env, path::Path, process::Command};
 
+use helper::buildVidPath;
 use serenity::prelude::TypeMapKey;
 use serenity::{async_trait, Client, client::*, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::{Ready}}};
 use tokio;
@@ -12,6 +16,9 @@ use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
 use regex::Regex;
 use rustube::{VideoFetcher, Id};
+use hrtime;
+
+use crate::helper::buildTxtPath;
 
 mod helper;
 
@@ -36,9 +43,6 @@ const YT: &str = "https://youtu.be/";
 
 static CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
                                      KYS, TIMER, WIN, BAN, ULIST];
-
-static PATH: &'static str = "/src/vid/";
-
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Enum Declaration 
@@ -79,8 +83,14 @@ impl EventHandler for Handler {
 
     }
 
-    async fn ready(&self, _: Context, ready: Ready){                // Successful connection to server check
+    async fn ready(&self, ctx: Context, ready: Ready){                // Successful connection to server check
+
+        let mut u_data = ctx.data.write().await;           
+        let u_map: &mut HashMap<u64, String> = u_data.get_mut::<User>().unwrap();
+        //TODO IMPLEMENT
+
         println!("{}, Connected to Server!", ready.user.name);
+
     }
 }
 
@@ -102,20 +112,41 @@ struct VidInfo {
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
-
-async fn insert_user(ctx: &Context, _msg: &Message) {  
-    let mut u_data = ctx.data.write().await;            // Waits for Lock Queue on write command and then proceeds with execution 
-    let u_map = u_data.get_mut::<User>().unwrap();    // Gets mutable reference to the data and stores it in counter
+// Adds user to user struct
+async fn insert_user(ctx: &Context, msg: &Message) {  
+    let mut u_data = ctx.data.write().await;           // Waits for Lock Queue on write command and then proceeds with execution 
+    let u_map: &mut HashMap<u64, String> = u_data.get_mut::<User>().unwrap();    // Gets mutable reference to the data and stores it in counter
     
-    // Download video
-    // Trim Video
-    // Save Video and get filepath to it (user ID as title)
-    // Add the User to the Map or replace their filepath (map value)
+    let key: String = msg.author.id.0.to_string().replace("@", "");
+    let path: String = buildVidPath(key.clone());
 
+    let filepath: String = buildTxtPath();
 
+    u_map.insert(key.parse::<u64>().unwrap(), path);                             // Inserts Element into Map
+    println!("Full Map: {:?}", u_map);
 
-    u_map.insert(12313123123, "Sex".to_string());                             // Inserts Element into Map
-    println!("{:?}", u_map);
+    match fs::remove_file(&filepath) {
+        Ok(()) => (),
+        Err(_E) => println!("Couldn't delete Struct File!"),
+    }
+
+    let mut file: File  = match File::create(&filepath) {
+        Ok(O) => O,
+        Err(_E) => return,
+    };
+
+    for user in u_map {
+        
+        let mut test: String = user.0.to_string();
+        test.push_str("=");
+        test.push_str(user.1.as_str());
+        test.push_str(",");
+
+        file.write_all(test.as_bytes()).expect("Couldn't write to File!");
+
+    }
+
+    file.write_all(b"\n").expect("Couldn't write to File!");
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -152,7 +183,7 @@ async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
     match cmd {
         COMMAND::E_TEST => println!("Test!"),
         COMMAND::E_SET => userMapCheckAndUpdate(&msg, &ctx).await,
-        COMMAND::INVALID => (),                                     // Should never happen but better be safe than sorry
+        COMMAND::INVALID => (),                                     // Should never happen 
         _ => println!("Not Implemented Yet"),
     }
 }
@@ -219,15 +250,43 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
             Err(_E) => {errHandle(msg, ctx, 1).await; return;}
         };
 
-    match editVideo(&vid, ctx).await {
-        Ok(()) => println!("Hershey"),
+    // Tries to trim the video
+    match editVideo(&vid).await {
+        Ok(()) => println!("Successful Edit!"),
         Err(_E) => {errHandle(msg, ctx, 2).await; return;},
     };
 
+    // Adds to user struct
+    insert_user(ctx, msg).await;
+
 }
 
-async fn editVideo(vid: &VidInfo, ctx: &Context) -> Result<(), &'static str> {
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Trims the video file
+async fn editVideo(vid: &VidInfo) -> Result<(), Error> {
+
+    let path: String = buildVidPath(vid.u_id.clone());
+    let path_edit: String = path.clone().replace(".mp3", "_edit.mp3");
+
+    let start: String = hrtime::from_sec_padded(vid.start);
+    let end: String = hrtime::from_sec_padded(vid.start + vid.u_length);
+    
+    match fs::remove_file(&path_edit) {
+        Ok(()) => (),
+        Err(_E) => println!("No File to delete! / No Permission to delete File!"),
+    }
+
+    match Command::new("ffmpeg").args(["-i", path.as_str(), "-ss", start.as_str(), "-to", end.as_str(), path_edit.as_str()]).output() {
+        Ok(O) => {
+            match fs::remove_file(path) {
+                Ok(()) => (),
+                Err(_E) => println!("Couldn't delete Source File!"),
+            }
+            println!("Stdout: {:?}", O.stdout);
+        }
+        Err(_E) => return Err(Error), 
+    };
     
 
     Ok(())
