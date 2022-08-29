@@ -18,7 +18,7 @@ use regex::Regex;
 use rustube::{VideoFetcher, Id};
 use hrtime;
 
-use crate::helper::buildTxtPath;
+use crate::helper::{buildTxtPath, fillStruct, removeUserAt};
 
 mod helper;
 
@@ -87,10 +87,15 @@ impl EventHandler for Handler {
 
         let mut u_data = ctx.data.write().await;           
         let u_map: &mut HashMap<u64, String> = u_data.get_mut::<User>().unwrap();
-        //TODO IMPLEMENT
+        let saved_map = fillStruct().expect("Unable to load file");
+
+        for (key, value) in saved_map.iter() {
+            u_map.insert(*key, value.to_string());
+        } 
+
+        println!("Current Users: {:?}", u_map);
 
         println!("{}, Connected to Server!", ready.user.name);
-
     }
 }
 
@@ -127,12 +132,12 @@ async fn insert_user(ctx: &Context, msg: &Message) {
 
     match fs::remove_file(&filepath) {
         Ok(()) => (),
-        Err(_E) => println!("Couldn't delete Struct File!"),
+        Err(_) => println!("Couldn't delete Struct File!"),
     }
 
     let mut file: File  = match File::create(&filepath) {
         Ok(O) => O,
-        Err(_E) => return,
+        Err(_) => return,
     };
 
     for user in u_map {
@@ -140,13 +145,12 @@ async fn insert_user(ctx: &Context, msg: &Message) {
         let mut test: String = user.0.to_string();
         test.push_str("=");
         test.push_str(user.1.as_str());
-        test.push_str(",");
+        test.push_str("\n");
 
         file.write_all(test.as_bytes()).expect("Couldn't write to File!");
 
     }
 
-    file.write_all(b"\n").expect("Couldn't write to File!");
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -194,7 +198,7 @@ async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
 async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     
     // Sets filepath
-    let u_name: String = helper::removeUserAt(msg.author.id.0.to_string());
+    let u_name: String = removeUserAt(msg.author.id.0.to_string());
     let path: &Path = Path::new(u_name.as_str());
 
     println!("Path to File: {:?}", path);
@@ -212,7 +216,7 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
 
     let id = match Id::from_str(&yt) {  // Does it again, but this time its from the api
         Ok(T) => T,
-        Err(_E) => {errHandle(msg, ctx, 0).await; return;},
+        Err(_) => {errHandle(msg, ctx, 0).await; return;},
     };
 
 
@@ -222,7 +226,7 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
         .fetch()
         .await {
             Ok(T) => T,
-            Err(_E) => {errHandle(msg, ctx, 0).await; return;},
+            Err(_) => {errHandle(msg, ctx, 0).await; return;},
         };
 
     let info = descrambler.video_info();    // Saves video info in variable
@@ -247,13 +251,13 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
         .download_to(path)
         .await {
             Ok(()) => println!("Successful Download!"),
-            Err(_E) => {errHandle(msg, ctx, 1).await; return;}
+            Err(_) => {errHandle(msg, ctx, 1).await; return;}
         };
 
     // Tries to trim the video
     match editVideo(&vid).await {
         Ok(()) => println!("Successful Edit!"),
-        Err(_E) => {errHandle(msg, ctx, 2).await; return;},
+        Err(_) => {errHandle(msg, ctx, 2).await; return;},
     };
 
     // Adds to user struct
@@ -274,18 +278,18 @@ async fn editVideo(vid: &VidInfo) -> Result<(), Error> {
     
     match fs::remove_file(&path_edit) {
         Ok(()) => (),
-        Err(_E) => println!("No File to delete! / No Permission to delete File!"),
+        Err(_) => println!("No File to delete! / No Permission to delete File!"),
     }
 
     match Command::new("ffmpeg").args(["-i", path.as_str(), "-ss", start.as_str(), "-to", end.as_str(), path_edit.as_str()]).output() {
         Ok(O) => {
             match fs::remove_file(path) {
                 Ok(()) => (),
-                Err(_E) => println!("Couldn't delete Source File!"),
+                Err(_) => println!("Couldn't delete Source File!"),
             }
             println!("Stdout: {:?}", O.stdout);
         }
-        Err(_E) => return Err(Error), 
+        Err(_) => return Err(Error), 
     };
     
 
