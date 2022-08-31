@@ -9,8 +9,10 @@ use std::{fs, fs::File};
 use std::{env, path::Path, process::Command};
 
 use helper::buildVidPath;
+use serenity::model::prelude::{ChannelId, MessageId, GuildId};
+use serenity::model::voice::VoiceState;
 use serenity::prelude::TypeMapKey;
-use serenity::{async_trait, Client, client::*, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::{Ready}}};
+use serenity::{async_trait, Client, client::*, client::bridge::voice::VoiceGatewayManager, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::Ready}};
 use tokio;
 use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
@@ -18,9 +20,20 @@ use regex::Regex;
 use rustube::{VideoFetcher, Id};
 use hrtime;
 
+mod helper;
 use crate::helper::{buildTxtPath, fillStruct, removeUserAt};
 
-mod helper;
+
+
+
+
+
+// TODO: send audio file to discord channel command
+
+
+
+
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -73,7 +86,7 @@ impl EventHandler for Handler {
 
     async fn message(&self, ctx: Context, msg: Message) {
         
-        println!("{} said : {:?}", msg.author.name, msg.content);        // Debug: Shows message contents
+        println!("{} said : {:?}", msg.author.name, msg.content);   // Debug: Shows message contents
         
         let command: COMMAND = checkCommand(&msg).await;            // Checks if a message is a command
 
@@ -87,9 +100,9 @@ impl EventHandler for Handler {
 
         let mut u_data = ctx.data.write().await;           
         let u_map: &mut HashMap<u64, String> = u_data.get_mut::<User>().unwrap();
-        let saved_map = fillStruct().expect("Unable to load file");
+        let saved_map: HashMap<u64, String> = fillStruct().expect("Unable to load file");   // Gets saved Data
 
-        for (key, value) in saved_map.iter() {
+        for (key, value) in saved_map.iter() {                           // Merges hashmaps
             u_map.insert(*key, value.to_string());
         } 
 
@@ -97,6 +110,42 @@ impl EventHandler for Handler {
 
         println!("{}, Connected to Server!", ready.user.name);
     }
+
+    async fn message_delete(&self, ctx: Context, cid: ChannelId, _mid: MessageId, _guildid: Option<GuildId>) {
+
+        if let Err(why) = cid.say(&ctx.http, "Ich sehe das").await {
+            println!("Send Message failed. Error: {:?}", why)
+        }
+    }
+
+    async fn voice_state_update(&self, _ctx: Context, old: Option<VoiceState>, new: VoiceState) {
+        
+        let user_id: u64 = new.user_id.0;
+        println!("{}", user_id);
+        let mut nochannel: bool = false;
+
+
+        match old {
+            Some(_) => (),
+            None => nochannel = true,
+        }
+
+        let channel: ChannelId = match new.channel_id {
+            Some(S) => S,
+            None => return,
+        };
+
+        if nochannel == true {
+            
+            
+            //channel.join_thread();
+
+            println!("true");
+        }
+
+    }
+
+
 }
 
 #[derive(Debug)]
@@ -122,12 +171,12 @@ async fn insert_user(ctx: &Context, msg: &Message) {
     let mut u_data = ctx.data.write().await;           // Waits for Lock Queue on write command and then proceeds with execution 
     let u_map: &mut HashMap<u64, String> = u_data.get_mut::<User>().unwrap();    // Gets mutable reference to the data and stores it in counter
     
-    let key: String = msg.author.id.0.to_string().replace("@", "");
-    let path: String = buildVidPath(key.clone());
+    let key: u64 = msg.author.id.0;
+    let path: String = buildVidPath(key.clone().to_string());
 
     let filepath: String = buildTxtPath();
 
-    u_map.insert(key.parse::<u64>().unwrap(), path);                             // Inserts Element into Map
+    u_map.insert(key, path);                             // Inserts Element into Map
     println!("Full Map: {:?}", u_map);
 
     match fs::remove_file(&filepath) {
@@ -237,7 +286,7 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     vid.v_length = info.player_response.video_details.length_seconds.clone();
     vid.start = matchStart(&msg.content.as_str(), &vid.v_length).await;
     vid.u_length = matchLength(&msg.content.as_str(), &vid.v_length, &vid.start).await;
-    vid.u_id = msg.author.id.0.to_string().clone().replace("@", "");
+    vid.u_id = msg.author.id.0.to_string().clone();
 
     println!("{:#?}", &vid);
 
@@ -385,7 +434,9 @@ async fn main() {
     // Lets bot know which event it should listen to
     let intents = GatewayIntents::GUILD_MESSAGES
     | GatewayIntents::DIRECT_MESSAGES
-    | GatewayIntents::MESSAGE_CONTENT;
+    | GatewayIntents::MESSAGE_CONTENT
+    | GatewayIntents::GUILD_VOICE_STATES
+    | GatewayIntents::non_privileged();
 
     // Assigns Token
     let token: String = env::var(key)
