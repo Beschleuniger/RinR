@@ -8,11 +8,12 @@ use std::io::Write;
 use std::{fs, fs::File};
 use std::{env, path::Path, process::Command};
 
-use helper::buildVidPath;
 use serenity::model::prelude::{ChannelId, MessageId, GuildId};
 use serenity::model::voice::VoiceState;
 use serenity::prelude::TypeMapKey;
-use serenity::{async_trait, Client, client::*, client::bridge::voice::VoiceGatewayManager, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::Ready}};
+use serenity::{async_trait, Client, client::*, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::Ready}};
+use songbird::SerenityInit;
+use songbird::{ffmpeg};
 use tokio;
 use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
@@ -21,42 +22,37 @@ use rustube::{VideoFetcher, Id};
 use hrtime;
 
 mod helper;
-use crate::helper::{buildTxtPath, fillStruct, removeUserAt};
-
-
-
+use crate::helper::*;
 
 
 
 // TODO: send audio file to discord channel command
-
-
-
-
-
+// TODO: check for user not having a file
+// TODO: Create new Bot Token and remove it from github
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
 
-const TEST: &str = "$test ";
-const SET: &str = "$setvideo ";
-const LIST: &str = "$list ";
-const DISCONNECT: &str = "$disconnect ";
-const STFU: &str = "STFU ";
-const KYS: &str = "kys ";
-const TIMER: &str = "$timer ";
-const WIN: &str = "$win ";
-const BAN: &str = "$ban ";
-const ULIST: &str = "$userlist ";
+static TEST: &str = "$test ";
+static SET: &str = "$setvideo ";
+static LIST: &str = "$list ";
+static DISCONNECT: &str = "$disconnect ";
+static STFU: &str = "STFU ";
+static KYS: &str = "kys ";
+static TIMER: &str = "$timer ";
+static WIN: &str = "$win ";
+static BAN: &str = "$ban ";
+static ULIST: &str = "$userlist ";
 
-const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
-const SET_RESPONSE: &str = "New video set!";
+static TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
+static SET_RESPONSE: &str = "New video set!";
 
-const YT: &str = "https://youtu.be/";
+static YT: &str = "https://youtu.be/";
 
 static CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
                                      KYS, TIMER, WIN, BAN, ULIST];
 
+static BOT_ID: u64 = 909567837964746863;
 //--------------------------------------------------------------------------------------------------------------------------
 // Enum Declaration 
 
@@ -118,31 +114,13 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn voice_state_update(&self, _ctx: Context, old: Option<VoiceState>, new: VoiceState) {
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
         
-        let user_id: u64 = new.user_id.0;
-        println!("{}", user_id);
-        let mut nochannel: bool = false;
-
-
-        match old {
-            Some(_) => (),
-            None => nochannel = true,
-        }
-
-        let channel: ChannelId = match new.channel_id {
-            Some(S) => S,
-            None => return,
+        match joinVoice(ctx, old, new).await {
+            Ok(()) => println!("Successfully joined VC!"),
+            Err(_) => (),
         };
-
-        if nochannel == true {
-            
-            
-            //channel.join_thread();
-
-            println!("true");
-        }
-
+ 
     }
 
 
@@ -199,8 +177,63 @@ async fn insert_user(ctx: &Context, msg: &Message) {
         file.write_all(test.as_bytes()).expect("Couldn't write to File!");
 
     }
-
 }
+
+async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: VoiceState) -> Result<(), Error>{
+
+    let user_id: u64 = new.user_id.0;
+
+    if user_id == BOT_ID {
+        return Err(Error);
+    }
+
+    match old {
+        Some(_) => return Err(Error),
+        None => (),
+    }
+
+    let channel_id: ChannelId = match new.channel_id {
+        Some(S) => S,
+        None => return Err(Error),
+    };
+
+
+    let guild_id: GuildId = new.guild_id.unwrap();
+
+    let path: String = buildVidPath(user_id.to_string());
+
+    let manager = songbird::get(&ctx).await
+                                                    .expect("Unable to get songbird instance!")
+                                                    .clone();
+
+    let _handler = manager.join(guild_id, channel_id).await;
+    
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+
+        let source = ffmpeg(path).await.expect("Unable to find source file!");
+
+        let handler = handler_lock.lock().await.play_source(source);
+
+        if let Some(dur) = handler.metadata().duration {
+            tokio::time::sleep(dur).await;
+        } 
+        
+    } else {
+        println!("Unexpected error");
+        return Err(Error);
+    }
+
+    // Maybe move to own function
+    match manager.remove(guild_id).await {
+        Ok(()) => (),
+        Err(E) => println!("{:?}", E), 
+    }
+
+    Ok(())
+}
+
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Checks message against list of commands
@@ -312,6 +345,9 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     // Adds to user struct
     insert_user(ctx, msg).await;
 
+    if let Err(why) = msg.channel_id.say(&ctx.http, SET_RESPONSE).await {
+        println!("Send Message failed. Error: {:?}", why)
+    }
 }
 
 
@@ -319,7 +355,7 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
 // Trims the video file
 async fn editVideo(vid: &VidInfo) -> Result<(), Error> {
 
-    let path: String = buildVidPath(vid.u_id.clone());
+    let path: String = removeUserAt(vid.u_id.clone());
     let path_edit: String = path.clone().replace(".mp3", "_edit.mp3");
 
     let start: String = hrtime::from_sec_padded(vid.start);
@@ -445,6 +481,7 @@ async fn main() {
     // Creates Client 
     let mut client: Client = Client::builder(token, intents)
         .event_handler(Handler)
+        .register_songbird()
         .await
         .expect("Couldn't Create Client!");
         {

@@ -1,4 +1,4 @@
-use std::{env, collections::HashMap, fs::File, io::{BufReader, BufRead, Lines}, fmt::Error};
+use std::{env, collections::HashMap, fs::File, io::{BufReader, BufRead, Lines}, fmt::Error, time::Duration, thread};
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Removes @ in userID
@@ -22,7 +22,7 @@ pub fn buildVidPath(name: String) -> String {
     
     let mut current: String = env::current_dir().expect("Unable to get current directory!").to_str().unwrap().to_string();
     let filepath: &str = "\\src\\vid\\";
-    let ext: &str = ".mp3";
+    let ext: &str = "_edit.mp3";
 
     current.push_str(filepath);
     current.push_str(&name);
@@ -66,4 +66,10 @@ pub fn fillStruct() -> Result<HashMap<u64, String>, Error> {
 
     println!("Saved Data: {:?}", map);
     Ok(map)
+}
+
+pub fn stopDuration(dur: Duration) {
+
+    thread::sleep(dur);
+
 }
