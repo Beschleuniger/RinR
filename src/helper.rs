@@ -1,4 +1,10 @@
-use std::{env, collections::HashMap, fs::File, io::{BufReader, BufRead, Lines}, fmt::Error, time::Duration, thread};
+use std::{env,
+          collections::HashMap,
+          fs::File,
+          io::{BufReader, BufRead, Lines},
+          path::Path};
+
+use tokio::fs::create_dir_all;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Removes @ in userID
@@ -33,6 +39,12 @@ pub fn buildVidPath(name: String) -> String {
 
 
 //--------------------------------------------------------------------------------------------------------------------------
+// Checks if a filepath exists
+pub fn checkVidPath(path: &String) -> bool {
+    Path::new(&path).exists()
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
 // Creates path for txt
 pub fn buildTxtPath() -> String {
 
@@ -46,12 +58,21 @@ pub fn buildTxtPath() -> String {
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Fills user array with data
-pub fn fillStruct() -> Result<HashMap<u64, String>, Error> {
+pub fn fillStruct() -> HashMap<u64, String> {
 
     let mut map: HashMap<u64, String> = HashMap::new();
     let path: String = buildTxtPath();
 
-    let file: File = File::open(path).expect("Couldn't open File!");
+    // Checks if file exists, returns empty map otherwise
+    let file: File = match File::open(&path) {
+        Ok(F) => F,
+        _ => {
+            File::create(path).expect("File doesn't exist and is unable to be created!");
+            println!("Created Struct File!");
+            return map;
+        },
+    };
+
     let reader: BufReader<File> = BufReader::new(file);
     let lines: Lines<BufReader<File>> = reader.lines();
 
@@ -64,12 +85,35 @@ pub fn fillStruct() -> Result<HashMap<u64, String>, Error> {
         };
     }
 
-    println!("Saved Data: {:?}", map);
-    Ok(map)
+    map
 }
 
-pub fn stopDuration(dur: Duration) {
 
-    thread::sleep(dur);
+pub async fn checkDirs() {
+
+    let current_dir: String = env::current_dir().expect("Unable to get working directory!")
+                                                .to_str()
+                                                .unwrap()
+                                                .to_string();
+
+    let mut structlocal: String = current_dir.clone();
+    let mut vidlocal: String = current_dir.clone();
+
+    structlocal.push_str("\\src\\struct\\");
+    vidlocal.push_str("\\src\\vid\\");
+
+    let structpath: &Path = Path::new(&structlocal);
+    let vidpath: &Path = Path::new(&vidlocal);
+
+    // Checks if the needed directories exist and creates them if not
+    if !structpath.exists() {
+        create_dir_all(structpath).await.expect("Unable to create folder ./src/struct/");
+        println!("Created Struct Directory!");
+    }
+    
+    if !vidpath.exists() {
+        create_dir_all(vidpath).await.expect("Unable to create folder ./src/vid/");
+        println!("Created Video Directory!");
+    }
 
 }
