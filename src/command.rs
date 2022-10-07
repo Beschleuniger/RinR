@@ -31,7 +31,7 @@ static BAN: &str = "$ban ";
 static ULIST: &str = "$userlist ";
 
 static TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
-static SET_RESPONSE: &str = "New video set!";
+static SET_RESPONSE: &str = "New video set!\nFor User: ";
 
 static YT: &str = "https://youtu.be/";
 
@@ -130,7 +130,7 @@ async fn insert_user(ctx: &Context, msg: &Message) {
     let filepath: String = buildTxtPath();
 
     u_map.insert(key, path);                             // Inserts Element into Map
-    println!("Full Map: {:?}", u_map);
+    println!("Full Map: {:#?}", u_map);
 
     match fs::remove_file(&filepath) {
         Ok(()) => (),
@@ -158,7 +158,11 @@ async fn insert_user(ctx: &Context, msg: &Message) {
 //--------------------------------------------------------------------------------------------------------------------------
 // Handles most of the logic for the YouTube video detection 
 async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
-    
+
+    if let Err(why) = msg.channel_id.say(&ctx.http, "Aight").await {
+        println!("Send Message failed. Error: {:?}", why)
+    }
+
     // Sets filepath
     let u_name: String = removeUserAt(msg.author.id.0.to_string());
     let path: &Path = Path::new(u_name.as_str());
@@ -225,7 +229,10 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     // Adds to user struct
     insert_user(ctx, msg).await;
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, SET_RESPONSE).await {
+    let mut response: String = SET_RESPONSE.to_string();
+    response.push_str(msg.author.name.as_str());
+
+    if let Err(why) = msg.channel_id.say(&ctx.http, response).await {
         println!("Send Message failed. Error: {:?}", why)
     }
 }

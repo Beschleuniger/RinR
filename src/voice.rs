@@ -1,7 +1,7 @@
 use std::fmt::Error;
 use std::sync::Arc;
 
-use serenity::model::prelude::{ChannelId, GuildId};
+use serenity::model::prelude::{ChannelId, GuildId, ChannelType, Member, GuildChannel};
 use serenity::model::voice::VoiceState;
 use serenity::{client::*};
 use songbird::{ffmpeg, Songbird};
@@ -11,7 +11,6 @@ use crate::helper::*;
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
 static BOT_ID: u64 = 909567837964746863;
-
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Joins the Voice channel and plays sound
@@ -26,6 +25,14 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: VoiceState) -
 
     // Gets id of channel
     let guild_id: GuildId = new.guild_id.unwrap();
+
+    let guild_channels = ctx.http.get_channels(guild_id.0).await;
+
+    match checkDuplicate(guild_channels, &ctx.cache).await {
+        Ok(_) => (),
+        Err(_) => return Err(Error),
+    };
+
 
     // Builds path for video
     let path: String = buildVidPath(user_id.to_string());
@@ -68,7 +75,6 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: VoiceState) -
         return Err(Error);
     }
 
-    // Maybe move to own function
     removeManager(&manager, guild_id).await;
 
     Ok(())
@@ -81,9 +87,45 @@ async fn removeManager(manager: &Arc<Songbird>, guild_id: GuildId) {
     
     match manager.remove(guild_id).await {
         Ok(()) => (),
-        Err(E) => println!("{:?}", E), 
+        Err(E) => println!("{:?}", E),
     }
 
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Checks if the bot already is in a channel
+async fn checkDuplicate(guild_channels: Result<Vec<GuildChannel>, serenity::prelude::SerenityError>, cache: &Arc<Cache>) -> Result<(), Error>{
+
+    // Loop over all channels in guild
+    for c in guild_channels.unwrap() {
+        
+        // Continue only if Voice Channel
+        if c.kind != ChannelType::Voice {
+            continue;
+        }
+
+        // Get member Vector of Voice Channel
+        let chan_members: Result<Vec<Member>, serenity::Error> = c.members(&cache).await;
+
+        // Check if Vector is empty
+        let members: Vec<Member> = match chan_members {
+            Ok(M) => M,
+            Err(_) => continue, 
+        };
+
+        // Loop over Vector
+        for m in members {
+            
+            // Check if Bot is in a channel already, if it is an error is returned
+            if m.user.id != BOT_ID {
+                continue;
+            }
+
+            return Err(Error);
+        }
+    }
+
+    Ok(())
 }
 
 

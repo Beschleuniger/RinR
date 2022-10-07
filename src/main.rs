@@ -21,9 +21,11 @@ use crate::command::*;
 mod voice;
 use crate::voice::*;
 
-// TODO: Check if bot is in channel and not add audio to current bot
 // TODO: send audio file to discord channel command
-// TODO: Set Outro
+// TODO: Update Readme and get icon/logo
+// TODO: Image macro
+// TODO: On mention "wos wüast du hurensohn"
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Struct Declaration
@@ -52,7 +54,7 @@ impl EventHandler for Handler {
         let saved_map: HashMap<u64, String> = fillStruct();           // Gets saved Data
 
         if saved_map.is_empty() {
-            println!("sex");
+            println!("No saved data!");
         }
 
         for (key, value) in saved_map.iter() {                           // Merges hashmaps
@@ -96,6 +98,8 @@ async fn main() {
     | GatewayIntents::DIRECT_MESSAGES
     | GatewayIntents::MESSAGE_CONTENT
     | GatewayIntents::GUILD_VOICE_STATES
+    | GatewayIntents::GUILD_PRESENCES
+    | GatewayIntents::GUILD_MEMBERS
     | GatewayIntents::non_privileged();
 
     // Assigns Token
