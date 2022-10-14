@@ -6,6 +6,8 @@ use std::{env,
 
 use tokio::fs::create_dir_all;
 
+use crate::predict::{UserPrediction};
+
 //--------------------------------------------------------------------------------------------------------------------------
 // Removes @ in userID
 pub fn removeUserAt(name: String) -> String {
@@ -20,23 +22,6 @@ pub fn removeUserAt(name: String) -> String {
 
     user_id
 }
-
-
-//--------------------------------------------------------------------------------------------------------------------------
-// Creates path for file to edit
-pub fn buildVidPath(name: String) -> String {
-    
-    let mut current: String = env::current_dir().expect("Unable to get current directory!").to_str().unwrap().to_string();
-    let filepath: &str = "\\src\\vid\\";
-    let ext: &str = "_edit.mp3";
-
-    current.push_str(filepath);
-    current.push_str(&name);
-    current.push_str(ext);
-    
-    current
-}
-
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Checks if a filepath exists
@@ -58,9 +43,9 @@ pub fn buildTxtPath() -> String {
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Fills user array with data
-pub fn fillStruct() -> HashMap<u64, String> {
+pub fn fillStruct() -> HashMap<u64, UserPrediction> {
 
-    let mut map: HashMap<u64, String> = HashMap::new();
+    let mut map: HashMap<u64, UserPrediction> = HashMap::new();
     let path: String = buildTxtPath();
 
     // Checks if file exists, returns empty map otherwise
@@ -79,16 +64,36 @@ pub fn fillStruct() -> HashMap<u64, String> {
     for line in lines {
        if let Ok(text) = line {
             let vec: Vec<&str> = text.as_str().split("=").collect();
+            if vec.len() != 4 {return map};
 
-            map.insert(vec[0].parse::<u64>().expect("Couldn't Parse u64")
-                        , vec[1].parse::<String>().expect("Couldn't parse String"));
+            let pre: UserPrediction = UserPrediction{   user_id: vec[1].parse::<u64>().expect("Couldn't parse u64"),
+                                                        prediction: vec[2].parse::<String>().expect("Couldn't parse String"),
+                                                        user_name: vec[3].parse::<String>().expect("Couldn't parse String ")};
+
+            map.insert(vec[0].parse::<u64>().expect("Couldn't Parse u64"), pre);
         };
     }
 
     map
 }
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Creates path for file to edit
+pub fn buildVidPath(name: String) -> String {
+    
+    let mut current: String = env::current_dir().expect("Unable to get current directory!").to_str().unwrap().to_string();
+    let filepath: &str = "\\src\\vid\\";
+    let ext: &str = "_edit.mp3";
 
+    current.push_str(filepath);
+    current.push_str(&name);
+    current.push_str(ext);
+    
+    current
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Checks if directories exist and creates them if not (first time startup)
 pub async fn checkDirs() {
 
     let current_dir: String = env::current_dir().expect("Unable to get working directory!")

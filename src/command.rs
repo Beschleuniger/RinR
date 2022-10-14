@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::{path::Path, process::Command};
-use std::io::Write;
-use std::{fs, fs::File};
 use std::fmt::Error;
+use std::fs;
 
 use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
@@ -14,29 +13,31 @@ use serenity::{client::*, model::{channel::*}};
 use serenity::prelude::TypeMapKey;
 
 use crate::helper::*;
-
+use crate::predict::*;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
 
-static TEST: &str = "$test ";
-static SET: &str = "$setvideo ";
-static LIST: &str = "$list ";
-static DISCONNECT: &str = "$disconnect ";
-static STFU: &str = "STFU ";
-static KYS: &str = "kys ";
-static TIMER: &str = "$timer ";
-static WIN: &str = "$win ";
-static BAN: &str = "$ban ";
-static ULIST: &str = "$userlist ";
+const TEST: &str = "$test";
+const SET: &str = "$setvideo ";
+const LIST: &str = "$list ";
+const DISCONNECT: &str = "$disconnect ";
+const STFU: &str = "STFU";
+const KYS: &str = "kys";
+const TIMER: &str = "$timer ";
+const WIN: &str = "$win";
+const BAN: &str = "$ban ";
+const ULIST: &str = "$userlist ";
+const SAY: &str = "$say ";
+pub const PREDICTION: &str = "$predict ";
 
-static TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
-static SET_RESPONSE: &str = "New video set!\nFor User: ";
+const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
+const SET_RESPONSE: &str = "New video set!\nFor User: ";
 
-static YT: &str = "https://youtu.be/";
+const YT: &str = "https://youtu.be/";
 
-static CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
-                                     KYS, TIMER, WIN, BAN, ULIST];
+const CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
+                                     KYS, TIMER, WIN, BAN, ULIST, SAY, PREDICTION];
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -54,6 +55,8 @@ pub enum COMMAND {
     E_WIN,
     E_BAN,
     E_ULIST,
+    E_SAY,
+    E_PREDICTION,
     INVALID,
 }
 
@@ -70,12 +73,11 @@ pub struct VidInfo {
     u_id: String,       // User Id
 }
 
-
 #[derive(Debug)]
 pub struct User {}
 
 impl TypeMapKey for User {
-    type Value = HashMap<u64, String>;
+    type Value = HashMap<u64, UserPrediction>;
 }
 
 
@@ -112,48 +114,41 @@ pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
     match cmd {
         COMMAND::E_TEST => println!("Test!"),
         COMMAND::E_SET => userMapCheckAndUpdate(&msg, &ctx).await,
+        COMMAND::E_WIN => winOrLose(&msg, &ctx).await,
+        COMMAND::E_SAY => repeatMessage(&msg, &ctx).await,
+        COMMAND::E_PREDICTION => addPrediction(&msg, &ctx).await,
         COMMAND::INVALID => (),                                     // Should never happen 
         _ => println!("Not Implemented Yet"),
     }
 }
 
-
 //--------------------------------------------------------------------------------------------------------------------------
-// Adds user to user struct
-async fn insert_user(ctx: &Context, msg: &Message) {  
-    let mut u_data = ctx.data.write().await;           // Waits for Lock Queue on write command and then proceeds with execution 
-    let u_map: &mut HashMap<u64, String> = u_data.get_mut::<User>().unwrap();    // Gets mutable reference to the data and stores it in counter
+// gives a 50/50 chance for a win or a loss
+async fn winOrLose(msg: &Message, ctx: &Context) {
     
-    let key: u64 = msg.author.id.0;
-    let path: String = buildVidPath(key.clone().to_string());
+    let rng: bool = rand::random();
+    let mes: &str = if rng {"W"} else {"L"};
 
-    let filepath: String = buildTxtPath();
-
-    u_map.insert(key, path);                             // Inserts Element into Map
-    println!("Full Map: {:#?}", u_map);
-
-    match fs::remove_file(&filepath) {
-        Ok(()) => (),
-        Err(_) => println!("Couldn't delete Struct File!"),
-    }
-
-    let mut file: File  = match File::create(&filepath) {
-        Ok(O) => O,
-        Err(_) => return,
-    };
-
-    for user in u_map {
-        
-        let mut test: String = user.0.to_string();
-        test.push_str("=");
-        test.push_str(user.1.as_str());
-        test.push_str("\n");
-
-        file.write_all(test.as_bytes()).expect("Couldn't write to File!");
-
+    if let Err(why) = msg.channel_id.say(&ctx.http, mes).await {
+        println!("Send Message failed. Error: {:?}", why)
     }
 }
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Repeats Message sent by user and deletes their message
+async fn repeatMessage(msg: &Message, ctx: &Context) {
+
+    let mes: String = msg.content.clone().replace(SAY, "");
+
+    if let Err(why) = msg.channel_id.say(&ctx.http, mes).await {
+        println!("Send Message failed. Error: {:?}", why)
+    }
+
+    if let Err(why) = msg.delete(&ctx.http).await {
+        println!("Delete Message failed Error: {:?}", why)
+    }
+
+}
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Handles most of the logic for the YouTube video detection 
@@ -161,6 +156,10 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
 
     if let Err(why) = msg.channel_id.say(&ctx.http, "Aight").await {
         println!("Send Message failed. Error: {:?}", why)
+    }
+
+    if let Err(why) = msg.delete(&ctx.http).await {
+        println!("Delete Message failed Error: {:?}", why)
     }
 
     // Sets filepath
@@ -225,9 +224,6 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
         Ok(()) => println!("Successful Edit!"),
         Err(_) => {errHandle(msg, ctx, 2).await; return;},
     };
-
-    // Adds to user struct
-    insert_user(ctx, msg).await;
 
     let mut response: String = SET_RESPONSE.to_string();
     response.push_str(msg.author.name.as_str());

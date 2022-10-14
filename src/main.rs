@@ -3,14 +3,17 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::{env};
+use std::env;
 
-use serenity::model::prelude::{ChannelId, MessageId, GuildId};
-use serenity::model::voice::VoiceState;
-use serenity::{async_trait, Client, client::*, prelude::{GatewayIntents, EventHandler}, model::{channel::*, prelude::Ready}};
-use songbird::SerenityInit;
 use tokio;
 use dotenv::dotenv;
+use songbird::SerenityInit;
+use serenity::model::prelude::{ChannelId, MessageId, GuildId};
+use serenity::model::voice::VoiceState;
+use serenity::{async_trait,
+                 Client, client::*, 
+                 prelude::{GatewayIntents, EventHandler},
+                 model::{channel::*, prelude::Ready}};
 
 mod helper;
 use crate::helper::*;
@@ -21,10 +24,15 @@ use crate::command::*;
 mod voice;
 use crate::voice::*;
 
+mod predict;
+use crate::predict::*;
+
 // TODO: send audio file to discord channel command
 // TODO: Update Readme and get icon/logo
 // TODO: Image macro
 // TODO: On mention "wos wüast du hurensohn"
+// TODO: Custom presence
+// TODO: Kick Timer
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -34,6 +42,25 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
+
+    async fn ready(&self, ctx: Context, ready: Ready){                // Successful connection to server check
+
+        let mut u_data = ctx.data.write().await;           
+        let u_map: &mut HashMap<u64, UserPrediction> = u_data.get_mut::<User>().unwrap();
+        let saved_map: HashMap<u64, UserPrediction> = fillStruct();           // Gets saved Data
+
+        if saved_map.is_empty() {
+            println!("No saved data!");
+        }
+
+        for (key, value) in saved_map.iter() {                           // Merges hashmaps
+            u_map.insert(*key, value.clone());
+        } 
+
+        println!("Loaded Predictions: {:#?}", u_map);
+
+        println!("{}, Connected to Server!", ready.user.name);
+    }
 
     async fn message(&self, ctx: Context, msg: Message) {
         
@@ -47,26 +74,22 @@ impl EventHandler for Handler {
 
     }
 
-    async fn ready(&self, ctx: Context, ready: Ready){                // Successful connection to server check
+    async fn message_delete(&self, ctx: Context, cid: ChannelId, _dmid: MessageId, gid: Option<GuildId>) {
+        
+        // Gets the last auditlog that has a member delete a message (72) and checks if the bot deleted it
 
-        let mut u_data = ctx.data.write().await;           
-        let u_map: &mut HashMap<u64, String> = u_data.get_mut::<User>().unwrap();
-        let saved_map: HashMap<u64, String> = fillStruct();           // Gets saved Data
+        let action_type: Option<u8> = 72.into();
+        let b_id: Option<u64> = None;
+        let before: Option<u64> = None;
+        let limit: Option<u8> = 1.into();
 
-        if saved_map.is_empty() {
-            println!("No saved data!");
+        let audit = ctx.http.get_audit_logs(gid.unwrap().0, action_type, b_id, before, limit).await;
+        
+        for a in audit.unwrap().entries {
+            if a.target_id.unwrap() == BOT_ID {
+                return;
+            }
         }
-
-        for (key, value) in saved_map.iter() {                           // Merges hashmaps
-            u_map.insert(*key, value.to_string());
-        } 
-
-        println!("Current Users: {:#?}", u_map);
-
-        println!("{}, Connected to Server!", ready.user.name);
-    }
-
-    async fn message_delete(&self, ctx: Context, cid: ChannelId, _mid: MessageId, _guildid: Option<GuildId>) {
 
         if let Err(why) = cid.say(&ctx.http, "Ich sehe das").await {
             println!("Send Message failed. Error: {:?}", why)
@@ -100,6 +123,7 @@ async fn main() {
     | GatewayIntents::GUILD_VOICE_STATES
     | GatewayIntents::GUILD_PRESENCES
     | GatewayIntents::GUILD_MEMBERS
+    | GatewayIntents::GUILD_MESSAGES
     | GatewayIntents::non_privileged();
 
     // Assigns Token
