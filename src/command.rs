@@ -110,6 +110,7 @@ pub async fn checkCommand(msg: &Message) -> COMMAND {
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Matches commands with the functions they should execute
+#[tokio::main]
 pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
 
     match cmd {

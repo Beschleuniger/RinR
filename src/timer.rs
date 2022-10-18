@@ -29,13 +29,13 @@ pub async fn timer(msg: &Message, ctx: &Context) {
     let u_min: u64 = match r_minutes.captures(&cmd) {   
         Some(capture) => {
             capture.get(1)
-                                      .unwrap()
-                                      .as_str()
-                                      .to_string()
-                                      .to_owned()
-                                      .clone()
-                                      .parse::<u64>()
-                                      .unwrap()
+                                    .unwrap()
+                                    .as_str()
+                                    .to_string()
+                                    .to_owned()
+                                    .clone()
+                                    .parse::<u64>()
+                                    .unwrap()
         },  
         None => {
             0
@@ -45,13 +45,13 @@ pub async fn timer(msg: &Message, ctx: &Context) {
     let u_sec: u64 = match r_seconds.captures(&cmd) {   
         Some(capture) => {
             let mut s: u64 = capture.get(1)
-                                      .unwrap()
-                                      .as_str()
-                                      .to_string()
-                                      .to_owned()
-                                      .clone()
-                                      .parse::<u64>()
-                                      .unwrap();
+                                    .unwrap()
+                                    .as_str()
+                                    .to_string()
+                                    .to_owned()
+                                    .clone()
+                                    .parse::<u64>()
+                                    .unwrap();
             if s > 59 {s = 59;};
             s
         },  

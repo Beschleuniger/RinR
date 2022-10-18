@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::env;
+use std::{env, thread};
 
 use tokio;
 use dotenv::dotenv;
@@ -14,6 +14,7 @@ use serenity::{async_trait,
                  Client, client::*, 
                  prelude::{GatewayIntents, EventHandler},
                  model::{channel::*, prelude::Ready}};
+
 
 mod helper;
 use crate::helper::{fillStruct, checkDirs};
@@ -70,8 +71,11 @@ impl EventHandler for Handler {
 
         if command == COMMAND::INVALID {return;}                    // Returns early if there is no command
 
-        executeCommand(command, &msg, &ctx).await;              // Executes Commands 
+        thread::spawn(move || {
+            executeCommand(command, &msg, &ctx);
+        }).join().expect("Panic!");
 
+     
     }
 
     async fn message_delete(&self, ctx: Context, cid: ChannelId, _dmid: MessageId, gid: Option<GuildId>) {
