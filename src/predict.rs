@@ -6,7 +6,7 @@ use serenity::model::prelude::Message;
 use serenity::prelude::Context;
 
 use crate::command::{PREDICTION, User};
-use crate::helper::buildTxtPath;
+use crate::helper::{buildTxtPath, say};
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -96,9 +96,7 @@ async fn printList(msg: &Message, ctx: &Context) {
         out.push_str("\n");
     }
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, out).await {
-        println!("Send Message failed. Error: {:?}", why)
-    }
+    say(msg, ctx, out).await;
 }
 
 
@@ -131,9 +129,8 @@ async fn insertUser(msg: &Message, ctx: &Context) {
 
     writeToFile(u_map);
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, "Added Prediction").await {
-        println!("Send Message failed. Error: {:?}", why)
-    }
+    say(msg, ctx, "Added Prediction".to_string()).await;
+
 }
 
 

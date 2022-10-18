@@ -14,6 +14,7 @@ use serenity::prelude::TypeMapKey;
 
 use crate::helper::*;
 use crate::predict::*;
+use crate::timer::*;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -114,6 +115,7 @@ pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
     match cmd {
         COMMAND::E_TEST => println!("Test!"),
         COMMAND::E_SET => userMapCheckAndUpdate(&msg, &ctx).await,
+        COMMAND::E_TIMER => timer(&msg, &ctx).await,
         COMMAND::E_WIN => winOrLose(&msg, &ctx).await,
         COMMAND::E_SAY => repeatMessage(&msg, &ctx).await,
         COMMAND::E_PREDICTION => addPrediction(&msg, &ctx).await,
@@ -127,26 +129,21 @@ pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
 async fn winOrLose(msg: &Message, ctx: &Context) {
     
     let rng: bool = rand::random();
-    let mes: &str = if rng {"W"} else {"L"};
+    let out: &str = if rng {"W"} else {"L"};
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, mes).await {
-        println!("Send Message failed. Error: {:?}", why)
-    }
+    say(msg, ctx, out.to_string()).await;
+
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Repeats Message sent by user and deletes their message
 async fn repeatMessage(msg: &Message, ctx: &Context) {
 
-    let mes: String = msg.content.clone().replace(SAY, "");
+    let out: String = msg.content.clone().replace(SAY, "");
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, mes).await {
-        println!("Send Message failed. Error: {:?}", why)
-    }
+    say(msg, ctx, out).await;
 
-    if let Err(why) = msg.delete(&ctx.http).await {
-        println!("Delete Message failed Error: {:?}", why)
-    }
+    delete(msg, ctx).await;
 
 }
 
@@ -154,13 +151,9 @@ async fn repeatMessage(msg: &Message, ctx: &Context) {
 // Handles most of the logic for the YouTube video detection 
 async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, "Aight").await {
-        println!("Send Message failed. Error: {:?}", why)
-    }
+    say(msg, ctx, "Aight".to_string()).await;
 
-    if let Err(why) = msg.delete(&ctx.http).await {
-        println!("Delete Message failed Error: {:?}", why)
-    }
+    delete(msg, ctx).await;
 
     // Sets filepath
     let u_name: String = removeUserAt(msg.author.id.0.to_string());
@@ -228,9 +221,9 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     let mut response: String = SET_RESPONSE.to_string();
     response.push_str(msg.author.name.as_str());
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, response).await {
-        println!("Send Message failed. Error: {:?}", why)
-    }
+
+    say(msg, ctx, response).await;
+
 }
 
 
@@ -278,9 +271,7 @@ async fn errHandle(msg: &Message, ctx: &Context, case: u8) {
         _ => "Invalid Case! / Not Implemented!",
     };
 
-    if let Err(why) = msg.channel_id.say(&ctx.http, err).await {
-        println!("Send Message failed. Error: {:?}", why)
-    }
+    say(msg, ctx, err.to_string()).await;
 
 }
 
@@ -314,7 +305,14 @@ async fn matchLength(msg: &str, v_length: &u64, v_start: &u64) -> u64 {
     
     let u_length: u64 = match length.captures(&msg) {   
         Some(capture) => {
-            let mut len: u64 = capture.get(1).unwrap().as_str().to_string().to_owned().clone().parse::<u64>().unwrap();
+            let mut len: u64 = capture.get(1)
+                                      .unwrap()
+                                      .as_str()
+                                      .to_string()
+                                      .to_owned()
+                                      .clone()
+                                      .parse::<u64>()
+                                      .unwrap();
 
             if  len > 10 { len = 10; }           // Makes sure length is in the right size bracket 
             else if len < 1 {len = 1; }

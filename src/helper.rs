@@ -4,6 +4,9 @@ use std::{env,
           io::{BufReader, BufRead, Lines},
           path::Path};
 
+use serenity::{model::prelude::Message,
+               prelude::Context};
+
 use tokio::fs::create_dir_all;
 
 use crate::predict::{UserPrediction};
@@ -121,4 +124,46 @@ pub async fn checkDirs() {
         println!("Created Video Directory!");
     }
 
+}
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Writes Message to provided channel
+pub async fn say(msg: &Message, ctx: &Context, out: String) {
+    if let Err(why) = msg.channel_id.say(&ctx.http, out).await {
+        println!("Send Message failed. Error: {:?}", why)
+    }
+}
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Deletes Message in provided channel
+pub async fn delete(msg: &Message, ctx: &Context) {
+    if let Err(why) = msg.delete(&ctx.http).await {
+        println!("Delete Message failed Error: {:?}", why)
+    }
+}
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Gets path for the TimerFile
+pub async fn findTimerPath() -> Option<String> {
+    
+    let current_dir: String = env::current_dir().expect("Unable to get working directory!")
+                                                .to_str()
+                                                .unwrap()
+                                                .to_string();
+
+    let mut timer: String = current_dir.clone();
+
+    timer.push_str("\\src\\vid\\timer.mp3");
+
+    let path: &Path = Path::new(&timer);
+
+    if !path.exists() {
+        println!("No timer.mp3 provided");
+        return None;
+    }
+
+    Some(path.to_str().unwrap().to_string())
 }

@@ -83,7 +83,7 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: VoiceState) -
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Disconnects Manager from Call
-async fn removeManager(manager: &Arc<Songbird>, guild_id: GuildId) {
+pub async fn removeManager(manager: &Arc<Songbird>, guild_id: GuildId) {
     
     match manager.remove(guild_id).await {
         Ok(()) => (),

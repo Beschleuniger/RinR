@@ -16,24 +16,24 @@ use serenity::{async_trait,
                  model::{channel::*, prelude::Ready}};
 
 mod helper;
-use crate::helper::*;
+use crate::helper::{fillStruct, checkDirs};
 
 mod command;
-use crate::command::*;
+use crate::command::{checkCommand, executeCommand,
+                     User, COMMAND};
 
 mod voice;
-use crate::voice::*;
+use crate::voice::{BOT_ID, joinVoice};
 
 mod predict;
-use crate::predict::*;
+use crate::predict::{UserPrediction};
 
+mod timer;
 // TODO: send audio file to discord channel command
 // TODO: Update Readme and get icon/logo
 // TODO: Image macro
 // TODO: On mention "wos wüast du hurensohn"
 // TODO: Custom presence
-// TODO: Kick Timer
-
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Struct Declaration
