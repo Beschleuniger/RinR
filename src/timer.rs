@@ -1,5 +1,4 @@
 use std::fmt::Error;
-use std::thread;
 use std::time::Duration;
 
 use regex::Regex;
@@ -8,7 +7,7 @@ use serenity::prelude::Context;
 use songbird::ffmpeg;
 
 use crate::helper::{say, findTimerPath};
-use crate::voice::removeManager;
+use crate::voice::{removeManager, checkDuplicate};
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Parses command input and starts timer
@@ -22,8 +21,14 @@ pub async fn timer(msg: &Message, ctx: &Context) {
     let guild_id: GuildId = msg.guild_id.unwrap();
 
     let v_channel_id: u64 = match getVoiceIfActive(author_id, guild_id.0, &ctx).await {
-        Some(C) => Some(C).unwrap(),
-        None => 0,
+        Some(C) => {
+            println!("Voice Active");
+            Some(C).unwrap()
+        },
+        None => {
+            println!("Voice Inactive");
+            0
+        },
     };
 
     let u_min: u64 = match r_minutes.captures(&cmd) {   
@@ -73,10 +78,14 @@ pub async fn timer(msg: &Message, ctx: &Context) {
 
     waitTime((u_min * 60) + u_sec).await;
 
-    match resolveVoiceChannel(ctx, guild_id, v_channel_id).await{
-        Ok(_) => (),
-        Err(_) => (),
-    };
+    if !checkDuplicate(ctx.http.get_channels(guild_id.0).await, &ctx.cache).await {
+
+        match resolveVoiceChannel(ctx, guild_id, v_channel_id).await{
+            Ok(_) => println!("Ok"),
+            Err(_) => println!("Error Received"),
+        };
+        
+    }
 
     let mut out: String = String::from("Your timer has ended!\n<@");
     out.push_str(&msg.author.id.0.to_string().as_str());
@@ -148,7 +157,8 @@ async fn buildTimerPhrase(min: &u64, sec: &u64) -> String {
 //--------------------------------------------------------------------------------------------------------------------------
 // Sleeps
 async fn waitTime(time: u64) {
-    thread::sleep(Duration::from_secs(time));
+    tokio::time::sleep(Duration::from_secs(time)).await;
+    
 }
 
 

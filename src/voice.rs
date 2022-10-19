@@ -29,8 +29,8 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: VoiceState) -
     let guild_channels = ctx.http.get_channels(guild_id.0).await;
 
     match checkDuplicate(guild_channels, &ctx.cache).await {
-        Ok(_) => (),
-        Err(_) => return Err(Error),
+        false => (),
+        true => return Err(Error),
     };
 
 
@@ -94,7 +94,7 @@ pub async fn removeManager(manager: &Arc<Songbird>, guild_id: GuildId) {
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Checks if the bot already is in a channel
-async fn checkDuplicate(guild_channels: Result<Vec<GuildChannel>, serenity::prelude::SerenityError>, cache: &Arc<Cache>) -> Result<(), Error>{
+pub async fn checkDuplicate(guild_channels: Result<Vec<GuildChannel>, serenity::prelude::SerenityError>, cache: &Arc<Cache>) -> bool {
 
     // Loop over all channels in guild
     for c in guild_channels.unwrap() {
@@ -121,11 +121,11 @@ async fn checkDuplicate(guild_channels: Result<Vec<GuildChannel>, serenity::prel
                 continue;
             }
 
-            return Err(Error);
+            return true;
         }
     }
 
-    Ok(())
+    false
 }
 
 

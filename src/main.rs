@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::{env, thread};
+use std::{env};
 
 use tokio;
 use dotenv::dotenv;
@@ -67,14 +67,13 @@ impl EventHandler for Handler {
         
         println!("{} said : {:?}", msg.author.name, msg.content);   // Debug: Shows message contents
         
+        //if msg.author.id.0 == BOT_ID {return;}                    // Uncomment if you don't want the bot to execute commands it repeated using say
+
         let command: COMMAND = checkCommand(&msg).await;            // Checks if a message is a command
 
         if command == COMMAND::INVALID {return;}                    // Returns early if there is no command
 
-        thread::spawn(move || {
-            executeCommand(command, &msg, &ctx);
-        }).join().expect("Panic!");
-
+        executeCommand(command, &msg, &ctx).await;
      
     }
 
