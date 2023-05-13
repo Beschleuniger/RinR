@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::{env};
@@ -8,7 +7,7 @@ use std::{env};
 use tokio;
 use dotenv::dotenv;
 use songbird::SerenityInit;
-use serenity::model::prelude::{ChannelId, MessageId, GuildId};
+use serenity::model::prelude::{ChannelId, MessageId, GuildId, Member};
 use serenity::model::voice::VoiceState;
 use serenity::{async_trait,
                  Client, client::*, 
@@ -35,6 +34,10 @@ mod timer;
 // TODO: Image macro
 // TODO: On mention "wos wüast du hurensohn"
 // TODO: Custom presence
+
+mod join;
+use crate::join::resolveRoles;
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Struct Declaration
@@ -107,6 +110,15 @@ impl EventHandler for Handler {
         };
     }
 
+    async fn guild_member_addition(&self, ctx: Context, new_member: Member) {
+        
+        match resolveRoles(ctx, &mut new_member.to_owned()).await {
+            Ok(()) => println!("Successfully added Roles for user {}", new_member.user.name),
+            Err(_) => println!("Unable to add role to user {}", new_member.user.name),
+        };
+        
+    }
+
 }
 
 
@@ -123,6 +135,7 @@ async fn main() {
     let intents = GatewayIntents::GUILD_MESSAGES
     | GatewayIntents::DIRECT_MESSAGES
     | GatewayIntents::MESSAGE_CONTENT
+    | GatewayIntents::GUILDS
     | GatewayIntents::GUILD_VOICE_STATES
     | GatewayIntents::GUILD_PRESENCES
     | GatewayIntents::GUILD_MEMBERS

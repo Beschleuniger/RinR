@@ -32,10 +32,10 @@ const ULIST: &str = "$userlist ";
 const SAY: &str = "$say ";
 pub const PREDICTION: &str = "$predict ";
 
-const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
+//const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
 const SET_RESPONSE: &str = "New video set!\nFor User: ";
 
-const YT: &str = "https://youtu.be/";
+//const YT: &str = "https://youtu.be/";
 
 const CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
                                      KYS, TIMER, WIN, BAN, ULIST, SAY, PREDICTION];

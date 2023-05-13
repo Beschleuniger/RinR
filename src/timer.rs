@@ -158,7 +158,6 @@ async fn buildTimerPhrase(min: &u64, sec: &u64) -> String {
 // Sleeps
 async fn waitTime(time: u64) {
     tokio::time::sleep(Duration::from_secs(time)).await;
-    
 }
 
 
