@@ -1,13 +1,14 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
+
 use std::collections::HashMap;
 use std::{env};
 
 use tokio;
 use dotenv::dotenv;
 use songbird::SerenityInit;
-use serenity::model::prelude::{ChannelId, MessageId, GuildId, Member};
+use serenity::model::prelude::{Member};
 use serenity::model::voice::VoiceState;
 use serenity::{async_trait,
                  Client, client::*, 
@@ -23,7 +24,7 @@ use crate::command::{checkCommand, executeCommand,
                      User, COMMAND};
 
 mod voice;
-use crate::voice::{BOT_ID, joinVoice};
+use crate::voice::{joinVoice};
 
 mod predict;
 use crate::predict::{UserPrediction};
@@ -32,8 +33,6 @@ mod timer;
 // TODO: send audio file to discord channel command
 // TODO: Update Readme and get icon/logo
 // TODO: Image macro
-// TODO: On mention "wos wüast du hurensohn"
-// TODO: Custom presence
 
 mod join;
 use crate::join::resolveRoles;
@@ -47,7 +46,7 @@ struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
 
-    async fn ready(&self, ctx: Context, ready: Ready){                // Successful connection to server check
+    async fn ready(&self, ctx: Context, ready: Ready) {                // Successful connection to server check
 
         let mut u_data = ctx.data.write().await;           
         let u_map: &mut HashMap<u64, UserPrediction> = u_data.get_mut::<User>().unwrap();
@@ -80,6 +79,7 @@ impl EventHandler for Handler {
      
     }
 
+    #[cfg(feature = "delete_annotation")]
     async fn message_delete(&self, ctx: Context, cid: ChannelId, _dmid: MessageId, gid: Option<GuildId>) {
         
         // Gets the last auditlog that has a member delete a message (72) and checks if the bot deleted it
@@ -103,9 +103,8 @@ impl EventHandler for Handler {
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
-        
-        match joinVoice(ctx, old, new).await {
-            Ok(()) => println!("Successfully joined VC!"),
+        match joinVoice(ctx, old, &new).await {
+            Ok(()) => println!("{} Successfully joined VC!", new.member.unwrap().user.name),
             Err(_) => (),
         };
     }

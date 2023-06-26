@@ -9,8 +9,8 @@ tokio = { version = "1.20.1", features = [
         "macros",
         "rt-multi-thread",]}
 serenity = { version = "0.11.5", default-features = false, features = ["utils", "client", "gateway", "rustls_backend", "model", "unstable_discord_api", "cache", "voice"]}
-strum = { version = "0.24.1", features = ["derive"]}
-strum_macros = "0.24.3"
+strum = { version = "0.25.0", features = ["derive"]}
+strum_macros = "0.25.0"
 async-mutex = "1.4.0"
 regex = "1.6.0"
 #rustube = {version = "0.6.0"}
@@ -20,6 +20,9 @@ songbird = { version = "0.3.2", features = ["driver-core"]}
 audiopus_sys = "0.2.2"
 dotenv = "0.15.0"
 rand = "0.8.5"
+#youtube_dl = "0.8.1"
+youtube_dl = {path="../youtube-dl-rs"}
+
 
 [profile.dev]
 opt-level = 0

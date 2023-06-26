@@ -1,16 +1,24 @@
 use std::collections::HashMap;
 use std::{path::Path, process::Command};
-use std::fmt::Error;
+use std::fmt::{Error};
+
+#[cfg(feature = "old_downloader")]
 use std::fs;
 
+use tokio::task;
 use strum::{IntoEnumIterator, EnumCount};
 use strum_macros::{EnumIter, Display};
 use regex::Regex;
+
+#[cfg(feature = "old_downloader")]
 use rustube::{VideoFetcher, Id};
+
+#[cfg(feature = "old_downloader")]
 use hrtime;
 
 use serenity::{client::*, model::{channel::*}};
 use serenity::prelude::TypeMapKey;
+use youtube_dl::{YoutubeDl};
 
 use crate::helper::*;
 use crate::predict::*;
@@ -147,45 +155,25 @@ async fn repeatMessage(msg: &Message, ctx: &Context) {
 
 }
 
+
 //--------------------------------------------------------------------------------------------------------------------------
-// Handles most of the logic for the YouTube video detection 
-async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
-
-    say(msg, ctx, "Aight".to_string()).await;
-
-    delete(msg, ctx).await;
-
-    // Sets filepath
-    let u_name: String = removeUserAt(msg.author.id.0.to_string());
-    let path: &Path = Path::new(u_name.as_str());
-
-    println!("Path to File: {:?}", path);
-
-
-    // Sets and matches YouTube Regex
-    let reg: Regex = Regex::new(r"https://(?:www)?\.?youtu\.?be\.?(?:com)?/?(?:watch\?v=)?(.{11})").unwrap();   // Regex to match YouTube links (long and short urls work / YouTube Shorts don't)
-    let mut yt: String = msg.content.clone();
-    let mut vid: VidInfo = VidInfo {name: "".to_string(), v_length: 0, start: 0, u_length: 0, u_id: "".to_string(),};
-
-    match reg.captures(&yt) {   // Uses Regex to capture the 11 URL characters that are important
-        Some(capture) => yt = capture.get(1).unwrap().as_str().to_string().to_owned(),  
-        None => {errHandle(msg, ctx, 0).await; return;},
-    }
+// Handles download of a video from youtube
+#[cfg(feature = "old_downloader")]
+async fn rustDL(msg: &Message, ctx: &Context, vid: &mut VidInfo, yt: String, path: &Path) -> Result<(), Error> {
 
     let id = match Id::from_str(&yt) {  // Does it again, but this time its from the api
         Ok(T) => T,
-        Err(_) => {errHandle(msg, ctx, 0).await; return;},
+        Err(_) => {errHandle(msg, ctx, 0).await; return Err(Error);},
     };
 
-
-    // Starts a descrambler for the Video Data
-    let descrambler = match VideoFetcher::from_id(id.into_owned()) // Fetches Videoinfo, should it exists
+     // Starts a descrambler for the Video Data
+     let descrambler = match VideoFetcher::from_id(id.into_owned()) // Fetches Videoinfo, should it exists
         .unwrap()
         .fetch()
         .await {
             Ok(T) => T,
-            Err(_) => {errHandle(msg, ctx, 0).await; return;},
-        };
+            Err(_) => {errHandle(msg, ctx, 0).await; return Err(Error);},
+    };
 
     let info = descrambler.video_info();    // Saves video info in variable
 
@@ -209,15 +197,138 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
         .download_to(path)
         .await {
             Ok(()) => println!("Successful Download!"),
-            Err(_) => {errHandle(msg, ctx, 1).await; return;}
+            Err(_) => {errHandle(msg, ctx, 1).await; return Err(Error);}
         };
 
     // Tries to trim the video
     match editVideo(&vid).await {
         Ok(()) => println!("Successful Edit!"),
-        Err(_) => {errHandle(msg, ctx, 2).await; return;},
+        Err(_) => {errHandle(msg, ctx, 2).await; return Err(Error);},
+    };  
+
+    Ok(())
+}
+
+#[cfg(not(feature = "old_downloader"))]
+async fn updateInfo(vid: &mut VidInfo, msg: &Message) {
+
+    // Saves some of the video info in a better format
+    vid.start = matchStart(&msg.content.as_str(), &vid.v_length).await;
+    vid.u_length = matchLength(&msg.content.as_str(), &vid.v_length, &vid.start).await;
+    vid.u_id = msg.author.id.0.to_string().clone();
+
+    println!("{:#?}", &vid);
+
+} 
+
+
+#[cfg(not(feature = "old_downloader"))]
+async fn rustDL(msg: &Message, ctx: &Context, vid: &mut VidInfo, yt: String, path: &Path) -> Result<(), Error> {
+
+    let form: String = format!("https://www.youtube.com/watch?v={}", yt);
+
+    println!("{}", form);
+
+    let video = match YoutubeDl::new(form).run() {
+        Ok(T) => T,
+        Err(E) => {
+            println!("{}", E);
+            return  Err(Error);
+        },  
     };
 
+    match video {
+        youtube_dl::YoutubeDlOutput::SingleVideo(V) => {
+            vid.name = match V.title {
+                Some(T) => T,
+                None => {
+                        errHandle(msg, ctx, 0).await; 
+                        return Err(Error);
+                },
+            };
+            vid.v_length = match V.duration {
+                Some(T) => T.as_i64().unwrap() as u64,
+                None => {
+                    errHandle(msg, ctx, 0).await; 
+                    return Err(Error);
+                },
+            };            
+        },
+        _ => {
+            errHandle(msg, ctx, 0).await; 
+            return Err(Error);
+        },
+    }
+
+    updateInfo(vid, &msg).await;
+
+
+    let section: String = format!("*{}-{}", vid.start, vid.u_length);
+
+    let command: String = format!(
+        "yt-dlp -o {} --download-sections {} -x --audio-format mp3 -f bestaudio https://www.youtube.com/watch?v={}",
+        path.to_str().unwrap(), section, yt
+    );
+
+    let down_res: Result<Result<std::process::Output, std::io::Error>, task::JoinError> = task::spawn_blocking(move || {
+        Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .output()  
+    }).await;
+
+    match down_res {
+        Ok(T) => {
+            match T {
+                Ok(_) => println!("Successful Download!"),
+                Err(_) => {
+                    errHandle(msg, ctx, 1).await; 
+                    return Err(Error);
+                },
+            }
+        },
+        Err(_) => {
+            errHandle(msg, ctx, 1).await; 
+            return Err(Error);
+        },    
+    }
+
+
+    Ok(())
+}
+
+
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Handles most of the logic for the YouTube video detection 
+async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
+
+    say(msg, ctx, "Aight".to_string()).await;
+
+    delete(msg, ctx).await;
+
+    // Sets filepath
+    let u_name: String = removeUserAt(msg.author.id.0.to_string());
+    let path: &Path = Path::new(u_name.as_str());
+
+    println!("Path to File: {:?}", path);
+
+    // Sets and matches YouTube Regex
+    let reg: Regex = Regex::new(r"https://(?:www)?\.?youtu\.?be\.?(?:com)?/?(?:watch\?v=)?(.{11})").unwrap();   // Regex to match YouTube links (long and short urls work / YouTube Shorts don't)
+    let mut yt: String = msg.content.clone();
+    let mut vid: VidInfo = VidInfo {name: "".to_string(), v_length: 0, start: 0, u_length: 0, u_id: "".to_string(),};
+
+    match reg.captures(&yt) {   // Uses Regex to capture the 11 URL characters that are important
+        Some(capture) => yt = capture.get(1).unwrap().as_str().to_string().to_owned(),  
+        None => {errHandle(msg, ctx, 0).await; return;},
+    }
+
+    match rustDL(msg, ctx, &mut vid, yt, path).await {
+        Ok(()) => (),
+        Err(_) => return,
+    }
+       
     let mut response: String = SET_RESPONSE.to_string();
     response.push_str(msg.author.name.as_str());
 
@@ -229,6 +340,7 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Trims the video file
+#[cfg(feature = "old_downloader")]
 async fn editVideo(vid: &VidInfo) -> Result<(), Error> {
 
     let path: String = removeUserAt(vid.u_id.clone());

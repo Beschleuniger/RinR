@@ -14,7 +14,7 @@ pub static BOT_ID: u64 = 909567837964746863;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Joins the Voice channel and plays sound
-pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: VoiceState) -> Result<(), Error> {
+pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: &VoiceState) -> Result<(), Error> {
 
     let user_id: u64 = new.user_id.0;
 

@@ -23,10 +23,11 @@ pub async fn resolveRoles(ctx: Context, member: &mut Member) -> Result<(), Seren
     let mut role_ids: Vec<RoleId> = Vec::with_capacity(2);
 
      match member_id {
-        ID_MORITZ | ID_DANA => {
+        ID_DANA => {
             role_ids.push(ROLE_REINCARNATION);
             role_ids.push(ROLE_GREATER_YIKE);
         },
+        ID_MORITZ => role_ids.push(ROLE_GREATER_YIKE),
         ID_DANA_PHONE | ID_FLO_PHONE | ID_MASL_PHONE => role_ids.push(ROLE_MOBILE),
         ID_FLO | ID_VALI => role_ids.push(ROLE_LESSER_YIKES),
         _ => role_ids.push(ROLE_REFUGEE),
