@@ -86,7 +86,7 @@ pub fn buildVidPath(name: String) -> String {
     
     let mut current: String = env::current_dir().expect("Unable to get current directory!").to_str().unwrap().to_string();
     let filepath: &str = "\\src\\vid\\";
-    let ext: &str = "_edit.mp3";
+    let ext: &str = ".mp3";
 
     current.push_str(filepath);
     current.push_str(&name);
@@ -167,3 +167,13 @@ pub async fn findTimerPath() -> Option<String> {
 
     Some(path.to_str().unwrap().to_string())
 }
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Stupid ass time formatter
+pub fn formatSec(secs: u64) -> String {
+    let hours: u64 = secs / 3600;
+    let minutes: u64 = secs / 60;
+    let seconds: u64 = secs % 60;
+
+    format!("{}:{:02}:{:02}", hours, minutes, seconds)
+} 

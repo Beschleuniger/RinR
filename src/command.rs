@@ -263,15 +263,17 @@ async fn rustDL(msg: &Message, ctx: &Context, vid: &mut VidInfo, yt: String, pat
     updateInfo(vid, &msg).await;
 
 
-    let section: String = format!("*{}-{}", vid.start, vid.u_length);
+    let section: String = format!("*{}-{}", formatSec(vid.start), formatSec(vid.start + vid.u_length));
 
     let command: String = format!(
-        "yt-dlp -o {} --download-sections {} -x --audio-format mp3 -f bestaudio https://www.youtube.com/watch?v={}",
+        "yt-dlp -o {} --download-sections {} -x --audio-format mp3 -f bestaudio https://www.youtube.com/watch?v={} --force-overwrites --force-keyframes-at-cuts",
         path.to_str().unwrap(), section, yt
     );
 
+    println!("{}", command);
+
     let down_res: Result<Result<std::process::Output, std::io::Error>, task::JoinError> = task::spawn_blocking(move || {
-        Command::new("sh")
+        Command::new("nu")
             .arg("-c")
             .arg(command)
             .output()  
@@ -282,12 +284,14 @@ async fn rustDL(msg: &Message, ctx: &Context, vid: &mut VidInfo, yt: String, pat
             match T {
                 Ok(_) => println!("Successful Download!"),
                 Err(_) => {
+                    println!("Output Error!");
                     errHandle(msg, ctx, 1).await; 
                     return Err(Error);
                 },
             }
         },
         Err(_) => {
+            println!("Join Error!");
             errHandle(msg, ctx, 1).await; 
             return Err(Error);
         },    
@@ -378,7 +382,7 @@ async fn errHandle(msg: &Message, ctx: &Context, case: u8) {
      let err: &str = match case {
 
         0 => "No valid Youtube Link given!",
-        1 => "Unable to downlaod Video!",
+        1 => "Unable to download Video!",
         2 => "Unable to edit video, old video has been overwritten!",
         _ => "Invalid Case! / Not Implemented!",
     };
