@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::{path::Path, process::Command};
-use std::fmt::{Error};
+use std::fmt::Error;
 
 #[cfg(feature = "old_downloader")]
 use std::fs;
@@ -16,13 +16,14 @@ use rustube::{VideoFetcher, Id};
 #[cfg(feature = "old_downloader")]
 use hrtime;
 
-use serenity::{client::*, model::{channel::*}};
+use serenity::{client::*, model::channel::*};
 use serenity::prelude::TypeMapKey;
-use youtube_dl::{YoutubeDl};
+use youtube_dl::YoutubeDl;
 
 use crate::helper::*;
 use crate::predict::*;
 use crate::timer::*;
+use crate::poll::*;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -39,6 +40,7 @@ const BAN: &str = "$ban ";
 const ULIST: &str = "$userlist ";
 const SAY: &str = "$say ";
 pub const PREDICTION: &str = "$predict ";
+const POLL: &str = "$poll ";
 
 //const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
 const SET_RESPONSE: &str = "New video set!\nFor User: ";
@@ -46,7 +48,8 @@ const SET_RESPONSE: &str = "New video set!\nFor User: ";
 //const YT: &str = "https://youtu.be/";
 
 const CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
-                                     KYS, TIMER, WIN, BAN, ULIST, SAY, PREDICTION];
+                                  KYS, TIMER, WIN, BAN, ULIST, SAY,
+                                  PREDICTION, POLL];
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -66,6 +69,7 @@ pub enum COMMAND {
     E_ULIST,
     E_SAY,
     E_PREDICTION,
+    E_POLL,
     INVALID,
 }
 
@@ -127,6 +131,7 @@ pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
         COMMAND::E_WIN => winOrLose(&msg, &ctx).await,
         COMMAND::E_SAY => repeatMessage(&msg, &ctx).await,
         COMMAND::E_PREDICTION => addPrediction(&msg, &ctx).await,
+        COMMAND::E_POLL => runPoll(&msg, &ctx).await,
         COMMAND::INVALID => (),                                     // Should never happen 
         _ => println!("Not Implemented Yet"),
     }

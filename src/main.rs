@@ -3,12 +3,12 @@
 
 
 use std::collections::HashMap;
-use std::{env};
+use std::env;
 
 use tokio;
 use dotenv::dotenv;
 use songbird::SerenityInit;
-use serenity::model::prelude::{Member};
+use serenity::model::prelude::Member;
 use serenity::model::voice::VoiceState;
 use serenity::{async_trait,
                  Client, client::*, 
@@ -24,10 +24,10 @@ use crate::command::{checkCommand, executeCommand,
                      User, COMMAND};
 
 mod voice;
-use crate::voice::{joinVoice};
+use crate::voice::joinVoice;
 
 mod predict;
-use crate::predict::{UserPrediction};
+use crate::predict::UserPrediction;
 
 mod timer;
 // TODO: send audio file to discord channel command
@@ -36,6 +36,8 @@ mod timer;
 
 mod join;
 use crate::join::resolveRoles;
+
+mod poll;
 
 
 //--------------------------------------------------------------------------------------------------------------------------

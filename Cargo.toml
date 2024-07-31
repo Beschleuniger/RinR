@@ -1,32 +1,43 @@
 [package]
 name = "RinR"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 
 [dependencies]
-tokio = { version = "1.20.1", features = [
+tokio = { version = "1.36.0", features = [
         "macros",
         "rt-multi-thread",]}
-serenity = { version = "0.11.5", default-features = false, features = ["utils", "client", "gateway", "rustls_backend", "model", "unstable_discord_api", "cache", "voice"]}
-strum = { version = "0.25.0", features = ["derive"]}
-strum_macros = "0.25.0"
+serenity = { version = "=0.11.7", default-features = false, features = ["utils", "client", "gateway", "rustls_backend", "model", "unstable_discord_api", "cache", "voice"]}
+strum = { version = "0.26.3", features = ["derive"]}
+strum_macros = "0.26.4"
 async-mutex = "1.4.0"
 regex = "1.6.0"
 #rustube = {version = "0.6.0"}
 rustube = {path="../rustube_custom"}
 hrtime = "0.2.0"
-songbird = { version = "0.3.2", features = ["driver-core"]}
+songbird = { version = "=0.3.2"}
 audiopus_sys = "0.2.2"
 dotenv = "0.15.0"
 rand = "0.8.5"
-#youtube_dl = "0.8.1"
-youtube_dl = {path="../youtube-dl-rs"}
+youtube_dl = "0.10.0"
 
 
 [profile.dev]
 opt-level = 0
-debug=1
+debug = 2
+debug-assertions = true
 
 [profile.release]
 opt-level = 3
+debug = 0
+debug-assertions = false
+strip = "symbols"
+lto = "fat"
+incremental = true
+
+
+[features]
+default = []
+old_downloader = []
+delete_annotation = []

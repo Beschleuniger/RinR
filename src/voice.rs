@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use serenity::model::prelude::{ChannelId, GuildId, ChannelType, Member, GuildChannel};
 use serenity::model::voice::VoiceState;
-use serenity::{client::*};
+use serenity::client::*;
 use songbird::{ffmpeg, Songbird};
 
 use crate::helper::*;
