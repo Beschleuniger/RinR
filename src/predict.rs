@@ -119,7 +119,7 @@ async fn insertUser(msg: &Message, ctx: &Context) {
     }
 
     let key: u64 = highest_id + 1;
-    let p_struct: UserPrediction = UserPrediction {user_id: msg.author.id.0,
+    let p_struct: UserPrediction = UserPrediction {user_id: msg.author.id.get(),
                                                     prediction: prediction,
                                                     user_name: msg.author.name.clone()};
 

@@ -24,6 +24,7 @@ use crate::helper::*;
 use crate::predict::*;
 use crate::timer::*;
 use crate::poll::*;
+use crate::fortnite::*;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -41,6 +42,7 @@ const ULIST: &str = "$userlist ";
 const SAY: &str = "$say ";
 pub const PREDICTION: &str = "$predict ";
 const POLL: &str = "$poll ";
+const FORTNITE: &str = "$fn ";
 
 //const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
 const SET_RESPONSE: &str = "New video set!\nFor User: ";
@@ -49,7 +51,7 @@ const SET_RESPONSE: &str = "New video set!\nFor User: ";
 
 const CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
                                   KYS, TIMER, WIN, BAN, ULIST, SAY,
-                                  PREDICTION, POLL];
+                                  PREDICTION, POLL, FORTNITE];
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -70,6 +72,7 @@ pub enum COMMAND {
     E_SAY,
     E_PREDICTION,
     E_POLL,
+    E_FORTNITE,
     INVALID,
 }
 
@@ -132,6 +135,7 @@ pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
         COMMAND::E_SAY => repeatMessage(&msg, &ctx).await,
         COMMAND::E_PREDICTION => addPrediction(&msg, &ctx).await,
         COMMAND::E_POLL => runPoll(&msg, &ctx).await,
+        COMMAND::E_FORTNITE => runFortnite(&msg, &ctx).await,
         COMMAND::INVALID => (),                                     // Should never happen 
         _ => println!("Not Implemented Yet"),
     }
@@ -220,7 +224,7 @@ async fn updateInfo(vid: &mut VidInfo, msg: &Message) {
     // Saves some of the video info in a better format
     vid.start = matchStart(&msg.content.as_str(), &vid.v_length).await;
     vid.u_length = matchLength(&msg.content.as_str(), &vid.v_length, &vid.start).await;
-    vid.u_id = msg.author.id.0.to_string().clone();
+    vid.u_id = msg.author.id.get().to_string().clone();
 
     println!("{:#?}", &vid);
 
@@ -318,7 +322,7 @@ async fn userMapCheckAndUpdate(msg: &Message, ctx: &Context) {
     delete(msg, ctx).await;
 
     // Sets filepath
-    let u_name: String = removeUserAt(msg.author.id.0.to_string());
+    let u_name: String = removeUserAt(msg.author.id.get().to_string());
     let path: &Path = Path::new(u_name.as_str());
 
     println!("Path to File: {:?}", path);

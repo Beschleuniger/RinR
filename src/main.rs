@@ -31,14 +31,17 @@ use crate::predict::UserPrediction;
 
 mod timer;
 // TODO: send audio file to discord channel command
-// TODO: Update Readme and get icon/logo
 // TODO: Image macro
+// TODO: set bot channel info
+
+
 
 mod join;
 use crate::join::resolveRoles;
 
 mod poll;
 
+mod fortnite;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Struct Declaration

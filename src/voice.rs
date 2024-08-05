@@ -1,10 +1,16 @@
 use std::fmt::Error;
+use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use serenity::model::prelude::{ChannelId, GuildId, ChannelType, Member, GuildChannel};
 use serenity::model::voice::VoiceState;
 use serenity::client::*;
-use songbird::{ffmpeg, Songbird};
+use songbird::input::{self, Compose};
+use songbird::tracks::TrackHandle;
+use songbird::{Songbird, input::File};
+use tokio::runtime::Handle;
+
 
 use crate::helper::*;
 
@@ -16,7 +22,7 @@ pub static BOT_ID: u64 = 909567837964746863;
 // Joins the Voice channel and plays sound
 pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: &VoiceState) -> Result<(), Error> {
 
-    let user_id: u64 = new.user_id.0;
+    let user_id: u64 = new.user_id.get();
 
     let channel_id = match checkError(user_id, old, &new) {
         Ok(C) => C,
@@ -26,7 +32,7 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: &VoiceState) 
     // Gets id of channel
     let guild_id: GuildId = new.guild_id.unwrap();
 
-    let guild_channels = ctx.http.get_channels(guild_id.0).await;
+    let guild_channels = ctx.http.get_channels(guild_id).await;
 
     match checkDuplicate(guild_channels, &ctx.cache).await {
         false => (),
@@ -36,6 +42,7 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: &VoiceState) 
 
     // Builds path for video
     let path: String = buildVidPath(user_id.to_string());
+
 
     // Checks if path exists
     match checkVidPath(&path) {
@@ -54,21 +61,39 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: &VoiceState) 
 
     if let Some(handler_lock) = manager.get(guild_id) {
 
-        let source = match ffmpeg(path).await {
+        /*let source: Input = match ffmpeg(path).await {
             Ok(I) => I,
             Err(_) => {
                 removeManager(&manager, guild_id).await;
                 return Err(Error);
             },
-        };
+        };*/
+
+        // I hate lifetimes
+        println!("Playing Path: {}", path);
+
+        let p: &mut str = Box::leak(path.into_boxed_str());
+
+        let p_path: &Path = Path::new(p);
+
+        let mut file_source: File<&Path> = input::File::new(&p_path);
+
+        let _ = match file_source.create_async().await {
+            Ok(I) => I,
+            Err(_) => {
+                removeManager(&manager, guild_id).await;
+                return Err(Error);
+            }
+        };        
 
         // Starts playing from source file
-        let handler = handler_lock.lock().await.play_source(source);
+        let _: TrackHandle = handler_lock.lock().await.play_input(file_source.into());
+
 
         // Sleeps for the length of the audio file so that it can play
-        if let Some(dur) = handler.metadata().duration {
-            tokio::time::sleep(dur).await;
-        } 
+        /*if let Some(dur) = handler.metadata().duration {
+            } */
+       tokio::time::sleep(Duration::from_secs(5)).await;
         
     } else {
         println!("Unexpected error");
@@ -105,7 +130,7 @@ pub async fn checkDuplicate(guild_channels: Result<Vec<GuildChannel>, serenity::
         }
 
         // Get member Vector of Voice Channel
-        let chan_members: Result<Vec<Member>, serenity::Error> = c.members(&cache).await;
+        let chan_members: Result<Vec<Member>, serenity::Error> = c.members(&cache);
 
         // Check if Vector is empty
         let members: Vec<Member> = match chan_members {

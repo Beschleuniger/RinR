@@ -1,15 +1,44 @@
-use std::{env,
-          collections::HashMap,
-          fs::File,
-          io::{BufReader, BufRead, Lines},
-          path::Path};
+use std::{collections::HashMap, default, env, fs::File, io::{BufRead, BufReader, Lines}, path::Path};
 
-use serenity::{model::prelude::Message,
-               prelude::Context};
+use chrono::NaiveTime;
+use serenity::{all::UserId, model::prelude::Message, prelude::Context};
 
 use tokio::fs::create_dir_all;
 
-use crate::predict::{UserPrediction};
+use serde::{Serialize, Deserialize};
+
+use crate::predict::UserPrediction;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DailyEvent {
+    name: String,
+    message: Option<String>,
+    timestamp: NaiveTime,
+    subscribers: Vec<UserId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RinrOptions {
+    bot_channel: u64,
+    events: Vec<DailyEvent>,
+    reserved1: u64,
+    reserved2: u64,
+    reserved3: u64,
+}
+
+impl Default for RinrOptions {
+    fn default() -> RinrOptions {
+        RinrOptions {
+            bot_channel: 0,
+            events: vec![],
+            reserved1: 0,
+            reserved2: 0,
+            reserved3: 0,
+        }
+    }
+
+}
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Removes @ in userID
@@ -177,3 +206,6 @@ pub fn formatSec(secs: u64) -> String {
 
     format!("{}:{:02}:{:02}", hours, minutes, seconds)
 } 
+
+
+//--------------------------------------------------------------------------------------------------------------------------
