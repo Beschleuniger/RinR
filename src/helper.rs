@@ -1,43 +1,176 @@
-use std::{collections::HashMap, default, env, fs::File, io::{BufRead, BufReader, Lines}, path::Path};
+use std::{collections::HashMap, env, fmt::Debug, fs::File, io::{BufRead, BufReader, Lines, Read}, path::Path, sync::mpsc::Sender};
 
-use chrono::NaiveTime;
-use serenity::{all::UserId, model::prelude::Message, prelude::Context};
+use chrono::{NaiveTime, Timelike};
+use serenity::{all::{ChannelId, UserId}, model::prelude::Message, prelude::{Context, TypeMapKey}};
 
-use tokio::fs::create_dir_all;
+use tokio::{fs::{create_dir_all, File as aFile}, io::AsyncWriteExt};
 
 use serde::{Serialize, Deserialize};
 
 use crate::predict::UserPrediction;
+use crate::event::Command as RinrCommand;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct DailyEvent {
-    name: String,
-    message: Option<String>,
-    timestamp: NaiveTime,
-    subscribers: Vec<UserId>,
+pub struct DailyEvent {
+    pub name: String,
+    pub id: u64,
+    pub message: Option<String>,
+    pub timestamp: NaiveTime,
+    pub subscribers: Vec<UserId>,
+    pub command: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventSignal {
+    pub event_type: RinrCommand,
+    pub event_info: Option<DailyEvent>,
+    pub channel_id: ChannelId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RinrOptions {
-    bot_channel: u64,
-    events: Vec<DailyEvent>,
-    reserved1: u64,
+    pub bot_channel: Option<u64>,
+    pub events: Vec<DailyEvent>,
+    pub id_counter: u64,
     reserved2: u64,
     reserved3: u64,
+}
+
+pub struct DailyEventSignalKey;
+
+
+impl TypeMapKey for DailyEventSignalKey {
+    type Value = Sender<EventSignal>;
+}
+
+impl Default for DailyEvent {
+    fn default() -> DailyEvent {
+        DailyEvent { 
+            name: "Default".to_string(),
+            id: 0,
+            message: None,
+            timestamp: NaiveTime::default(),
+            subscribers: vec![],
+            command: None 
+        }
+    }
+}
+
+
+impl TypeMapKey for RinrOptions {
+    type Value = HashMap<u64, RinrOptions>;
 }
 
 impl Default for RinrOptions {
     fn default() -> RinrOptions {
         RinrOptions {
-            bot_channel: 0,
+            bot_channel: None,
             events: vec![],
-            reserved1: 0,
+            id_counter: 0,
             reserved2: 0,
             reserved3: 0,
         }
     }
-
 }
+
+pub trait States {
+    fn insert(&mut self, event: DailyEvent);
+
+    fn subscribe(&mut self, event_data: DailyEvent) -> bool;
+
+    fn unsubscribe(&mut self, event_data: DailyEvent) -> bool;
+
+    fn removeEntry(&mut self, num: u64); // by name or id
+
+    fn setChannel(&mut self, num: u64);
+
+    fn resortEvents(&mut self);
+}
+
+impl <'a> States for &'a mut RinrOptions {
+    
+    fn insert(&mut self, mut event: DailyEvent) {
+        
+        event.id = self.id_counter;
+
+        if event.subscribers.first().unwrap().get() == 1u64 {
+            event.subscribers.clear();
+        }
+        
+        self.events.push(event);
+        self.id_counter += 1;
+    }
+
+    fn subscribe(&mut self, event_data: DailyEvent) -> bool {
+        
+        for event in &mut self.events {
+            if event.id == event_data.id {
+                let id: &UserId = event_data.subscribers.first().unwrap();
+
+                if !event.subscribers.contains(id) {
+                    event.subscribers.push(*id);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    fn unsubscribe(&mut self, event_data: DailyEvent) -> bool{
+
+        for event in &mut self.events {
+            if event.id == event_data.id {
+                let id: &UserId = event_data.subscribers.first().unwrap();
+
+                if event.subscribers.contains(id) {
+                    event.subscribers.retain(|x| x != id);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    fn removeEntry(&mut self, num: u64) {
+        self.events.retain(|x| x.id != num);
+    }
+
+    fn setChannel(&mut self, num: u64) {
+        self.bot_channel = Some(num);
+    }
+
+    fn resortEvents(&mut self) {
+        let curr_time: NaiveTime = chrono::offset::Local::now().time();
+
+        self.events.sort_by_key(|e| curr_time.timeDif(&e.timestamp));
+    }
+}
+
+pub trait Diff {
+    fn timeDif(&self, other: &NaiveTime) -> i64;
+}
+
+impl Diff for NaiveTime {
+
+    fn timeDif(&self, other: &NaiveTime) -> i64 {
+        let current_secs: i64 = self.num_seconds_from_midnight() as i64;
+        let target_secs: i64 = other.num_seconds_from_midnight() as i64;
+
+        let difference: i64 = target_secs - current_secs;
+
+        if difference >= 0 {
+            difference
+        } else {
+            difference + 24 * 3600
+        }
+    }
+}
+
+
+
+
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -209,3 +342,91 @@ pub fn formatSec(secs: u64) -> String {
 
 
 //--------------------------------------------------------------------------------------------------------------------------
+// Write to Config
+pub async fn writeConfig(data: Option<&RinrOptions>) {
+
+    let mut path: String = env::current_dir().expect("Unable to get current directory!").to_str().unwrap().to_string();
+    let folder: &str = "\\src\\config\\";
+    let end: &str = "config.json";
+
+    path.push_str(folder);
+
+    let p: &Path = Path::new(path.as_str());
+
+    if !p.exists() {
+        create_dir_all(&path).await.expect("Unable to create folder ./src/config/");
+        println!("Created Config Directory!");
+    }
+
+    path.push_str(end);
+
+    let mut file: aFile = match aFile::create(&path).await {
+        Ok(F) => F,
+        _ => aFile::create(&path).await.expect("File doesn't exist and is unable to be created!"),
+    };
+
+    println!("path: {}", path);
+    println!("{}", serde_json::to_string(data.unwrap()).unwrap());
+
+    let _ = match data {
+        Some(R) => file.write_all(serde_json::to_string(R).unwrap().as_bytes()).await.expect("Unable to serialize config!"),
+        None => file.write_all(serde_json::to_string(&createDefaultConfig()).unwrap().as_bytes()).await.expect("Unable to serialize default config!"),
+    };
+    
+    let _ = file.flush().await;
+
+    println!("Wrote Config!");
+}
+
+
+
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Read Config File
+pub async fn readConfig() -> RinrOptions {
+
+    
+    let mut current: String = env::current_dir().expect("Unable to get current directory!").to_str().unwrap().to_string();
+    let filepath: &str = "\\src\\config\\";
+    let config: &str = "config.json";
+
+    current.push_str(filepath);
+
+    let path: &Path = Path::new(current.as_str());
+
+    if !path.exists() {
+        create_dir_all(path).await.expect("Unable to create folder ./src/config/");
+        println!("Created Config Directory!");
+    }
+
+    current.push_str(config);
+
+    let mut file: File = match File::open(&current) {
+        Ok(F) => F,
+        _ => {
+            File::create(&current).expect("File doesn't exist and is unable to be created!");
+            return createDefaultConfig();
+        },
+    };
+
+
+    let mut json: String = String::new();
+
+    match file.read_to_string(&mut json) {
+        Ok(_) => (),
+        Err(e) => {
+            println!("{}", e);
+            return createDefaultConfig()
+        }
+    }
+
+
+    serde_json::from_str(&json).unwrap_or(createDefaultConfig())
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Create default config
+fn createDefaultConfig() -> RinrOptions {
+    RinrOptions::default()
+}

@@ -3,8 +3,11 @@
 
 
 use std::collections::HashMap;
-use std::env;
+use std::{env, thread};
+use std::sync::mpsc;
+use std::sync::mpsc::{Sender, Receiver};
 
+use helper::{EventSignal, RinrOptions};
 use tokio;
 use dotenv::dotenv;
 use songbird::SerenityInit;
@@ -17,7 +20,7 @@ use serenity::{async_trait,
 
 
 mod helper;
-use crate::helper::{fillStruct, checkDirs};
+use crate::helper::{fillStruct, checkDirs, readConfig, DailyEventSignalKey};
 
 mod command;
 use crate::command::{checkCommand, executeCommand,
@@ -32,8 +35,8 @@ use crate::predict::UserPrediction;
 mod timer;
 // TODO: send audio file to discord channel command
 // TODO: Image macro
-// TODO: set bot channel info
-
+// TODO: set bot channel info event system
+// TODO: admin checked commands to wipe the sound folder
 
 
 mod join;
@@ -42,6 +45,9 @@ use crate::join::resolveRoles;
 mod poll;
 
 mod fortnite;
+
+mod event;
+use crate::event::*;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Struct Declaration
@@ -53,9 +59,30 @@ impl EventHandler for Handler {
 
     async fn ready(&self, ctx: Context, ready: Ready) {                // Successful connection to server check
 
+        // Aquire Lock
         let mut u_data = ctx.data.write().await;           
+        
+        // Read config file
+        let config: RinrOptions = readConfig().await;
+        println!("Config: {:#?}", config);
+
+        // Create channel for new thread
+        let (send, recv): (Sender<EventSignal>, Receiver<EventSignal>) = mpsc::channel();
+
+        let _event_handler = thread::spawn(move || {
+            loops(config, recv);
+        });
+
+
+
+        u_data.insert::<DailyEventSignalKey>(send);
+
+
+        // Gets saved Data
         let u_map: &mut HashMap<u64, UserPrediction> = u_data.get_mut::<User>().unwrap();
-        let saved_map: HashMap<u64, UserPrediction> = fillStruct();           // Gets saved Data
+        let saved_map: HashMap<u64, UserPrediction> = fillStruct();
+
+
 
         if saved_map.is_empty() {
             println!("No saved data!");
