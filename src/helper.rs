@@ -1,8 +1,9 @@
-use std::{collections::HashMap, env, fmt::Debug, fs::File, io::{BufRead, BufReader, Lines, Read}, path::Path, sync::mpsc::Sender};
+use std::{collections::HashMap, env, fmt::Debug, fs::File, io::{BufRead, BufReader, Lines, Read}, path::Path, str::FromStr, sync::mpsc::Sender};
 
-use chrono::{NaiveTime, Timelike};
+use chrono::{NaiveDate, NaiveTime, Timelike};
 use serenity::{all::{ChannelId, UserId}, model::prelude::Message, prelude::{Context, TypeMapKey}};
 
+use strum::Display;
 use tokio::{fs::{create_dir_all, File as aFile}, io::AsyncWriteExt};
 
 use serde::{Serialize, Deserialize};
@@ -18,7 +19,19 @@ pub struct DailyEvent {
     pub timestamp: NaiveTime,
     pub subscribers: Vec<UserId>,
     pub command: Option<String>,
+    pub date: NaiveDate,
+    pub interval: Timeslice,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Display, PartialEq, Eq)]
+pub enum Timeslice {
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+    Once,
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventSignal {
@@ -51,11 +64,34 @@ impl Default for DailyEvent {
             message: None,
             timestamp: NaiveTime::default(),
             subscribers: vec![],
-            command: None 
+            command: None,
+            date: NaiveDate::default(),
+            interval: Timeslice::Once, 
         }
     }
 }
 
+impl Default for Timeslice {
+    fn default() -> Timeslice {
+        Timeslice::Daily
+    }
+}
+
+impl FromStr for Timeslice {
+
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Timeslice, Self::Err> {
+        match input.to_lowercase().as_str() {
+            "daily" => Ok(Timeslice::Daily),
+            "weekly" => Ok(Timeslice::Weekly),
+            "monthly" => Ok(Timeslice::Monthly),
+            "yearly" => Ok(Timeslice::Yearly),
+            "once" => Ok(Timeslice::Once),
+            _ => Err(()),
+        }
+    }
+}
 
 impl TypeMapKey for RinrOptions {
     type Value = HashMap<u64, RinrOptions>;

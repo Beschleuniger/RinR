@@ -14,9 +14,9 @@
 
 
 */
-use std::{env, sync::mpsc::{Receiver, Sender}, time::Duration};
+use std::{env, str::FromStr, sync::mpsc::{Receiver, Sender}, time::Duration};
 
-use chrono::NaiveTime;
+use chrono::{Datelike, Local, NaiveDate, NaiveTime};
 use regex::Regex;
 use lazy_static::lazy_static;
 
@@ -30,7 +30,7 @@ use crate::helper::{
     writeConfig,
     DailyEvent, DailyEventSignalKey,
     Diff, EventSignal,
-    RinrOptions, States
+    RinrOptions, States, Timeslice
 };
 
 
@@ -54,9 +54,12 @@ lazy_static! {
     static ref reg_time: Regex = Regex::new(r"time=\[([01]\d|2[0-3]):([0-5]\d)\]").unwrap();
     static ref reg_sub: Regex = Regex::new(r"subscribe=\[(0|1)\]").unwrap();
     static ref reg_command: Regex = Regex::new(r"command=\[(.*?)\]").unwrap();
+    static ref reg_date: Regex = Regex::new(r"date=(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4})").unwrap();
+    static ref reg_interval: Regex = Regex::new(r"(?i)interval=(Daily|Weekly|Monthly|Yearly|Once)").unwrap();
 
     // Mode Remove, Subscribe, Unsubscribe
     static ref reg_id: Regex = Regex::new(r"id=(\d+)").unwrap();
+
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,7 +116,7 @@ pub fn loops(mut config: RinrOptions, recv: Receiver<EventSignal>) {
             Ok(D) => D,
             Err(_) => {
                 println!("Timeout!");
-                activateEvent(&config, &http);
+                activateEvent(&mut config, &http);
                 continue; 
             }
         };
@@ -136,15 +139,45 @@ pub fn loops(mut config: RinrOptions, recv: Receiver<EventSignal>) {
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Executes an event 
-fn activateEvent(config: &RinrOptions, http: &Http) {
+fn activateEvent(mut config: &mut RinrOptions, http: &Http) {
 
     if config.bot_channel == None {
         return;
     }
-    
-    
-    if let Some(current_event) = config.events.first() {
         
+    if let Some(current_event) = config.events.first() {
+
+        let current_day: NaiveDate = Local::now().date_naive();
+
+        let mut remove: bool = false;
+
+        match current_event.interval {
+            Timeslice::Daily => (),
+            Timeslice::Weekly => {
+                if !((current_day - current_event.date).num_days().abs() % 7 == 0) {
+                    return;
+                }
+            },
+            Timeslice::Monthly => {
+                if current_day.month() != current_event.date.month() {
+                    return;
+                }
+            },
+            Timeslice::Yearly => {
+                if current_day.year() != current_event.date.year() {
+                    return;
+                }
+            },
+            Timeslice::Once => {
+                if (current_day != current_event.date) && (current_day < current_event.date) {
+                    return;
+                }
+
+                remove = true;
+            }
+        }
+
+
         let mut subsc_string: Vec<String> = current_event.subscribers.iter().map(|id| format!("<@{}>", id.get())).collect();
         
         if subsc_string.len() == 0 {
@@ -164,6 +197,11 @@ fn activateEvent(config: &RinrOptions, http: &Http) {
 
         if current_event.command != None {
             rt.block_on(sendWrapper(ChannelId::new(config.bot_channel.unwrap()), http, current_event.command.clone().unwrap()));
+        }
+
+        if remove {
+            config.removeEntry(current_event.id);
+            rt.block_on(writeConfig(Some(&config)));
         }
     }
 }
@@ -294,13 +332,15 @@ fn formatEvent(event: &DailyEvent) -> String {
     }
 
     format!(
-        "Event: {}\nID: {}\nMessage: {}\nTime: {}\nSubscribers: {}\nCommand: {}\n\n",
+        "Event: {}\nID: {}\nMessage: {}\nTime: {}\nSubscribers: {}\nCommand: {}\nDate: {}\nInterval: {}\n\n",
         event.name,
         event.id,
         event.message.as_deref().unwrap_or("No Message"),
         event.timestamp,
         subsc_string.join(", "),
         event.command.as_deref().unwrap_or("No Command"),
+        event.date,
+        event.interval,
     )
 }
 
@@ -365,6 +405,8 @@ async fn createSubscribeEvent(msg: &Message) -> EventSignal {
                     timestamp: NaiveTime::default(),
                     subscribers: vec![UserId::new(msg.author.id.get())],
                     command: None,
+                    date: NaiveDate::default(),
+                    interval: Timeslice::default(),
                 }),
                 channel_id: msg.channel_id,
             }
@@ -390,6 +432,8 @@ async fn createUnsubscribeEvent(msg: &Message) -> EventSignal {
                     timestamp: NaiveTime::default(),
                     subscribers: vec![UserId::new(msg.author.id.get())],
                     command: None,
+                    date: NaiveDate::default(),
+                    interval: Timeslice::default(),
                 }),
                 channel_id: msg.channel_id,
             }
@@ -415,6 +459,8 @@ async fn createDeleteEvent(msg: &Message) -> EventSignal {
                     timestamp: NaiveTime::default(),
                     subscribers: vec![],
                     command: None,
+                    date: NaiveDate::default(),
+                    interval: Timeslice::default(),
                 }),
                 channel_id: msg.channel_id,
             }
@@ -436,6 +482,8 @@ async fn createInsert(msg: &Message) -> EventSignal {
     let mut event_time: Option<NaiveTime> = None;
     let mut event_subscribe: u64 = 1;
     let mut event_command: Option<String> = None;
+    let mut event_date: Option<NaiveDate> = None;
+    let mut event_interval: Option<Timeslice> = None;
 
     if let Some(name) = parse_first_match(text, &reg_name) {
         println!("Name: {}", name);
@@ -470,11 +518,35 @@ async fn createInsert(msg: &Message) -> EventSignal {
         event_command = Some(command);
     }
 
+    if let Some(date) = parse_date(text) {
+        println!("Date: {}", date);
+        event_date = Some(date);
+        if event_date.unwrap() < Local::now().date_naive() {
+            event_date = Some(Local::now().date_naive());
+        }
+    }
+
+    if let Some(interval) = parse_interval(text) {
+        println!("Interval: {}", interval);
+        event_interval = Some(interval);
+    }
+
+
 
     if event_name.is_none() || event_time.is_none() {
         println!("Invalid Event");
         return createInvalid().await;
     }
+
+    if event_date == None {
+        event_date = Some(Local::now().date_naive());
+    }
+
+    if event_interval == None {
+        event_interval = Some(Timeslice::default());
+    }
+
+
 
     let user: UserId = UserId::new(event_subscribe);
     let v: Vec<UserId> = vec![user];
@@ -488,10 +560,66 @@ async fn createInsert(msg: &Message) -> EventSignal {
             subscribers: v,
             timestamp: event_time.unwrap(),
             command: event_command,
+            date: event_date.unwrap(),
+            interval: event_interval.unwrap(),
         }),
         channel_id: msg.channel_id,
     };
 }
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Creates an invalid event signal as a fallback
+async fn createInvalid() -> EventSignal {
+    EventSignal {event_type: Command::Invalid, event_info: None, channel_id: ChannelId::new(1)}
+} 
+
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Regex parsing function for the date
+fn parse_date(text: &str) -> Option<NaiveDate> {
+    
+    let mut d: u32 = 0;
+    let mut m: u32 = 0;
+    let mut y: i32 = 0;
+    
+    if let Some(dates) = reg_date.captures(text) {
+        
+        if let Some(day) = dates.name("day") {
+            d = day.as_str().parse::<u32>().unwrap();
+        }
+
+        if let Some(month) = dates.name("month") {
+            m = month.as_str().parse::<u32>().unwrap();
+        }
+
+        if let Some(year) = dates.name("year") {
+            y = year.as_str().parse::<i32>().unwrap();
+        }
+
+        return NaiveDate::from_ymd_opt(y, m, d);
+    }
+
+    None
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Regex parsing function for the date
+fn parse_interval(text: &str) -> Option<Timeslice> {
+    reg_interval.captures(text).and_then(|caps| {
+        let time = caps.get(1).map(|t| t.as_str());
+        match time {
+            Some(t) => {
+                match Timeslice::from_str(t) {
+                    Ok(f) => Some(f),
+                    Err(_) => None,
+                } 
+            }
+            None => None,
+        }
+    })
+}
+
 
 
 
@@ -520,12 +648,6 @@ fn parse_first_match(text: &str, regex: &Regex) -> Option<String> {
     regex.captures(text).and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }
 
-
-//--------------------------------------------------------------------------------------------------------------------------
-// Creates an invalid event signal as a fallback
-async fn createInvalid() -> EventSignal {
-    EventSignal {event_type: Command::Invalid, event_info: None, channel_id: ChannelId::new(1)}
-} 
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Creates the EventSignal to set the bot channel
