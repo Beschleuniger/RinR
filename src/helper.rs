@@ -121,6 +121,8 @@ pub trait States {
     fn setChannel(&mut self, num: u64);
 
     fn resortEvents(&mut self);
+
+    fn printElements(&self);
 }
 
 impl <'a> States for &'a mut RinrOptions {
@@ -153,7 +155,7 @@ impl <'a> States for &'a mut RinrOptions {
         return false;
     }
 
-    fn unsubscribe(&mut self, event_data: DailyEvent) -> bool{
+    fn unsubscribe(&mut self, event_data: DailyEvent) -> bool {
 
         for event in &mut self.events {
             if event.id == event_data.id {
@@ -182,6 +184,13 @@ impl <'a> States for &'a mut RinrOptions {
 
         self.events.sort_by_key(|e| curr_time.timeDif(&e.timestamp));
     }
+
+    fn printElements(&self) {
+        for x in self.events.clone() {
+            println!("{:#?}", x);
+        }
+    }
+
 }
 
 pub trait Diff {
@@ -196,7 +205,8 @@ impl Diff for NaiveTime {
 
         let difference: i64 = target_secs - current_secs;
 
-        if difference >= 0 {
+        
+        if difference > 0 {
             difference
         } else {
             difference + 24 * 3600

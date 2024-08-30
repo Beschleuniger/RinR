@@ -99,20 +99,25 @@ pub fn loops(mut config: RinrOptions, recv: Receiver<EventSignal>) {
 
         (&mut config).resortEvents();
 
-        let mut duration: i64 = 0;
+        let mut duration: Option<i64> = None;
 
         if let Some(first) = config.events.first() {
             let curr_time: NaiveTime = chrono::offset::Local::now().time();
-            duration = curr_time.timeDif(&first.timestamp);
+            duration = Some(curr_time.timeDif(&first.timestamp));
+            if duration.unwrap() == 0 {
+                println!("Continuing");
+                continue;
+            }
         }
 
-        if duration == 0 {
-            duration = 3600;
+
+        if duration == None {
+            duration = Some(3600);
         }
 
-        println!("Time until next Event/Timeout: {}s", duration);
+        println!("Time until next Event/Timeout: {}s", duration.unwrap());
 
-        let data: EventSignal = match recv.recv_timeout(Duration::from_secs(duration as u64)) {
+        let data: EventSignal = match recv.recv_timeout(Duration::from_secs(duration.unwrap() as u64)) {
             Ok(D) => D,
             Err(_) => {
                 println!("Timeout!");
@@ -151,32 +156,40 @@ fn activateEvent(mut config: &mut RinrOptions, http: &Http) {
 
         let mut remove: bool = false;
 
+        println!("Activated event {}!", current_event.name);
+
         match current_event.interval {
             Timeslice::Daily => (),
             Timeslice::Weekly => {
                 if !((current_day - current_event.date).num_days().abs() % 7 == 0) {
+                    println!("Not the right weekday, skipping!");
                     return;
                 }
             },
             Timeslice::Monthly => {
-                if current_day.month() != current_event.date.month() {
+                if (current_day.month() != current_event.date.month()) || (current_day.day() != current_event.date.day()) {
+                    println!("Not the right day of the month, skipping!");
                     return;
                 }
             },
             Timeslice::Yearly => {
-                if current_day.year() != current_event.date.year() {
+                if (current_day.year() != current_event.date.year()) || (current_day.month() != current_event.date.month()) || (current_day.day() != current_event.date.day()) {
+                    println!("Not the right day of the year, skipping!");
                     return;
                 }
             },
             Timeslice::Once => {
                 if (current_day != current_event.date) && (current_day < current_event.date) {
+                    println!("Not the right day, skipping!");
                     return;
                 }
 
+                println!("This event will be removed!");
                 remove = true;
             }
         }
 
+        println!("Event {}, will proceed!", current_event.name);
 
         let mut subsc_string: Vec<String> = current_event.subscribers.iter().map(|id| format!("<@{}>", id.get())).collect();
         
@@ -302,6 +315,8 @@ fn listEvent(config: &RinrOptions, id: ChannelId, http: &Http) {
 
     if form.len() == 0 {
         form = String::from("No Events Available");
+    } else {
+        form.insert_str(0, "@silent ");
     }
 
 

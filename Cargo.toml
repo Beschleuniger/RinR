@@ -5,14 +5,14 @@ edition = "2021"
 
 
 [dependencies]
-tokio = { version = "1.39.2", features = [
+tokio = { version = "1.39.3", features = [
         "macros",
         "rt-multi-thread",]}
 serenity = { version = "0.12.2", default-features = false, features = ["utils", "client", "gateway", "standard_framework","rustls_backend", "model", "unstable_discord_api", "cache", "voice"]}
 strum = { version = "0.26.3", features = ["derive"]}
 strum_macros = "0.26.4"
 async-mutex = "1.4.0"
-regex = "1.6.0"
+regex = "1.10.6"
 rustube = {version = "0.6.0"}
 #rustube = {path="../rustube_custom"}
 hrtime = "0.2.0"
@@ -22,10 +22,10 @@ dotenv = "0.15.0"
 rand = "0.8.5"
 youtube_dl = "0.10.0"
 fortnite-api = "0.1.3"
-reqwest = "0.12.5"
+reqwest = "0.12.7"
 chrono = "0.4.38"
-serde = "1.0.204"
-serde_json = "1.0.122"
+serde = "1.0.209"
+serde_json = "1.0.127"
 lazy_static = "1.5.0"
 
 [profile.dev]
@@ -38,9 +38,8 @@ opt-level = 3
 debug = 0
 debug-assertions = false
 strip = "symbols"
-lto = "fat"
+#lto = "fat"
 incremental = true
-
 
 [features]
 default = []
