@@ -139,7 +139,7 @@ pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
         COMMAND::E_SAY => repeatMessage(&msg, &ctx).await,
         COMMAND::E_PREDICTION => addPrediction(&msg, &ctx).await,
         COMMAND::E_POLL => runPoll(&msg, &ctx).await,
-        COMMAND::E_FORTNITE => runFortnite(&msg, &ctx).await,
+        COMMAND::E_FORTNITE => fortniteWrapper(&msg, &ctx).await,
         COMMAND::E_EVENT => eventHandler(&msg, &ctx).await,
         COMMAND::INVALID => (),                                     // Should never happen 
         _ => println!("Not Implemented Yet"),
