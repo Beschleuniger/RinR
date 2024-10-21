@@ -4,14 +4,8 @@
 
     event execution thread as mpsc consumer
     
-    execution thread will recv_timeout (find async version) until a signal has come in and execute the corresponding event, tbd
+    execution thread will recv_timeout until a signal has come in and execute the corresponding event
     or if it receives a new event it will rebuild the config struct and save it to the disk, if it timeouts then the event is run and the next one is scheduled
-
-    we will also need new functions to list, create and delete these events as well as options to subscribe to them
-
-
-    the queue will use a ringbuffer, rebuilding it on every add or delete
-
 
 */
 use std::{env, str::FromStr, sync::mpsc::{Receiver, Sender}, time::Duration};
@@ -167,7 +161,7 @@ fn activateEvent(mut config: &mut RinrOptions, http: &Http) {
                 }
             },
             Timeslice::Monthly => {
-                if (current_day.month() != current_event.date.month()) || (current_day.day() != current_event.date.day()) {
+                if current_day.day() != current_event.date.day() {
                     println!("Not the right day of the month, skipping!");
                     return;
                 }

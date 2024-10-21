@@ -122,7 +122,7 @@ pub trait States {
 
     fn resortEvents(&mut self);
 
-    fn printElements(&self);
+    fn _printElements(&self);
 }
 
 impl <'a> States for &'a mut RinrOptions {
@@ -185,7 +185,7 @@ impl <'a> States for &'a mut RinrOptions {
         self.events.sort_by_key(|e| curr_time.timeDif(&e.timestamp));
     }
 
-    fn printElements(&self) {
+    fn _printElements(&self) {
         for x in self.events.clone() {
             println!("{:#?}", x);
         }

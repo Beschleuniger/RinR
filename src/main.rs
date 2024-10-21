@@ -9,7 +9,7 @@ use std::sync::mpsc::{Sender, Receiver};
 
 use helper::{EventSignal, RinrOptions};
 use tokio;
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use songbird::SerenityInit;
 use serenity::model::prelude::Member;
 use serenity::model::voice::VoiceState;

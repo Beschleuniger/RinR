@@ -118,7 +118,7 @@ fn processDocument(page_source: &String) -> Option<String> {
             name: name,
             time: time,
             price: price 
-        });        
+        });
     }
 
     formatItems(item_list)

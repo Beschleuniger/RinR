@@ -1,7 +1,6 @@
 use std::fmt::Error;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 use serenity::model::prelude::{ChannelId, GuildId, ChannelType, Member, GuildChannel};
 use serenity::model::voice::VoiceState;
@@ -10,6 +9,7 @@ use songbird::input::{self, Compose};
 use songbird::tracks::TrackHandle;
 use songbird::{Songbird, input::File};
 
+use mp3_duration;
 
 use crate::helper::*;
 
@@ -77,6 +77,7 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: &VoiceState) 
 
         let mut file_source: File<&Path> = input::File::new(&p_path);
 
+
         let _ = match file_source.create_async().await {
             Ok(I) => I,
             Err(_) => {
@@ -88,11 +89,17 @@ pub async fn joinVoice(ctx: Context, old: Option<VoiceState>, new: &VoiceState) 
         // Starts playing from source file
         let _: TrackHandle = handler_lock.lock().await.play_input(file_source.into());
 
-
         // Sleeps for the length of the audio file so that it can play
+                
         /*if let Some(dur) = handler.metadata().duration {
             } */
-       tokio::time::sleep(Duration::from_secs(5)).await;
+        
+        if let Ok(dur) = mp3_duration::from_path(p_path) {
+            tokio::time::sleep(dur).await;
+        } else {
+            println!("Unable to fetch duration!");
+        }
+        
         
     } else {
         println!("Unexpected error");
