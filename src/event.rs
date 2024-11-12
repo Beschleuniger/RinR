@@ -82,7 +82,6 @@ impl Command {
 }
 
 
-
 //--------------------------------------------------------------------------------------------------------------------------
 // Event thread that listens on a channel and handles Events and EventSignals
 pub fn loops(mut config: RinrOptions, recv: Receiver<EventSignal>) {
@@ -246,7 +245,7 @@ fn unsubscribeEvent(mut config: &mut RinrOptions, data: &EventSignal, http: &Htt
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Deletes an event
-fn deleteEvent(mut config: &mut RinrOptions, http: &Http, data: &EventSignal) {
+fn deleteEvent(mut config: &mut RinrOptions, http: &Http, data: &EventSignal) { 
 
     config.removeEntry(data.event_info.clone().unwrap().id);
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fmt::Debug, fs::File, io::{BufRead, BufReader, Lines, Read}, path::Path, str::FromStr, sync::mpsc::Sender};
+use std::{collections::{HashMap, HashSet}, env, fmt::Debug, fs::File, io::{BufRead, BufReader, Lines, Read}, path::Path, str::FromStr, sync::mpsc::Sender};
 
 use chrono::{NaiveDate, NaiveTime, Timelike};
 use serenity::{all::{ChannelId, UserId}, model::prelude::Message, prelude::{Context, TypeMapKey}};
@@ -6,10 +6,25 @@ use serenity::{all::{ChannelId, UserId}, model::prelude::Message, prelude::{Cont
 use strum::Display;
 use tokio::{fs::{create_dir_all, File as aFile}, io::AsyncWriteExt};
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::predict::UserPrediction;
 use crate::event::Command as RinrCommand;
+
+
+
+
+
+#[derive(Debug, Clone, Default)]
+pub struct Santa {
+    pub members: HashSet<UserId>
+}
+
+impl TypeMapKey for Santa {
+    type Value = Santa;
+
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyEvent {

@@ -7,7 +7,7 @@ use std::{env, thread};
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender, Receiver};
 
-use helper::{EventSignal, RinrOptions};
+use helper::{EventSignal, RinrOptions, Santa};
 use tokio;
 use dotenvy::dotenv;
 use songbird::SerenityInit;
@@ -48,6 +48,8 @@ mod fortnite;
 
 mod event;
 use crate::event::*;
+
+mod santa;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Struct Declaration
@@ -186,6 +188,8 @@ async fn main() {
         {
             let mut u_data = client.data.write().await;
             u_data.insert::<User>(HashMap::default());
+            
+            u_data.insert::<Santa>(Santa::default());
         }
  
     // Connects to Server

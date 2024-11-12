@@ -26,6 +26,8 @@ use crate::timer::*;
 use crate::poll::*;
 use crate::fortnite::*;
 use crate::event::*;
+use crate::santa::santaHandler;
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Const Declaration
@@ -45,7 +47,7 @@ pub const PREDICTION: &str = "$predict ";
 const POLL: &str = "$poll ";
 const FORTNITE: &str = "$fn ";
 const EVENT: &str = "$event ";
-
+const SANTA: &str = "$santa";
 
 //const TEST_RESPONSE: &str = "Pissing all by yourself handsome?";
 const SET_RESPONSE: &str = "New video set!\nFor User: ";
@@ -54,7 +56,7 @@ const SET_RESPONSE: &str = "New video set!\nFor User: ";
 
 const CONSTS: &'static [&str] = &[TEST, SET, LIST, DISCONNECT, STFU,
                                   KYS, TIMER, WIN, BAN, ULIST, SAY,
-                                  PREDICTION, POLL, FORTNITE, EVENT];
+                                  PREDICTION, POLL, FORTNITE, EVENT, SANTA];
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -77,6 +79,7 @@ pub enum COMMAND {
     E_POLL,
     E_FORTNITE,
     E_EVENT,
+    E_SANTA,
     INVALID,
 }
 
@@ -99,6 +102,7 @@ pub struct User {}
 impl TypeMapKey for User {
     type Value = HashMap<u64, UserPrediction>;
 }
+
 
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -141,6 +145,7 @@ pub async fn executeCommand(cmd: COMMAND, msg: &Message, ctx: &Context) {
         COMMAND::E_POLL => runPoll(&msg, &ctx).await,
         COMMAND::E_FORTNITE => fortniteWrapper(&msg, &ctx).await,
         COMMAND::E_EVENT => eventHandler(&msg, &ctx).await,
+        COMMAND::E_SANTA => santaHandler(&msg, &ctx).await,
         COMMAND::INVALID => (),                                     // Should never happen 
         _ => println!("Not Implemented Yet"),
     }
