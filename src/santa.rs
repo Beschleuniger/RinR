@@ -65,7 +65,7 @@ async fn dmUser(gift: &UserId, rec: &UserId, ctx: &Context) {
     if let Ok(user) =  gift.to_user(&ctx.http).await {
         if let Ok(channel) = user.create_dm_channel(&ctx.http).await {
             match channel.say(&ctx.http, msg).await {
-                Ok(_) =>println!("Successfully sent message to user {}:{} -> {}", user.name, user.id, rec.get()),
+                Ok(_) =>println!("Successfully sent message to user {} -> {}", user.id, rec.get()),
                 Err(_) => println!("Failed to send message to {}", user.name),
             }
         }        

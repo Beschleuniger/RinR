@@ -8,7 +8,7 @@
     or if it receives a new event it will rebuild the config struct and save it to the disk, if it timeouts then the event is run and the next one is scheduled
 
 */
-use std::{env, str::FromStr, sync::mpsc::{Receiver, Sender}, time::Duration};
+use std::{env, str::FromStr, sync::mpsc::{Receiver, RecvTimeoutError, Sender}, time::Duration};
 
 use chrono::{Datelike, Local, NaiveDate, NaiveTime};
 use regex::Regex;
@@ -92,44 +92,55 @@ pub fn loops(mut config: RinrOptions, recv: Receiver<EventSignal>) {
 
         (&mut config).resortEvents();
 
-        let mut duration: Option<i64> = None;
+        // let mut duration: Option<i64> = None;
+        let curr_time: NaiveTime = chrono::offset::Local::now().time();
 
-        if let Some(first) = config.events.first() {
-            let curr_time: NaiveTime = chrono::offset::Local::now().time();
-            duration = Some(curr_time.timeDif(&first.timestamp));
-            if duration.unwrap() == 0 {
-                println!("Continuing");
-                continue;
+        let duration = if let Some(first) = config.events.first() {
+            let diff = curr_time.timeDif(&first.timestamp);
+
+            if diff <= 0 {
+                0
+            } else {
+                diff as u64
             }
-        }
+        } else {
+            3600
+        };
+
+        // if let Some(first) = config.events.first() {
+        //     duration = Some(curr_time.timeDif(&first.timestamp));
+        //     if duration.unwrap() == 0 {
+        //         println!("Continuing");
+        //         continue;
+        //     }
+        // }
 
 
-        if duration == None {
-            duration = Some(3600);
-        }
+        // if duration == None {
+        //     duration = Some(3600);
+        // }
 
-        println!("Time until next Event/Timeout: {}s", duration.unwrap());
+        println!("Time until next Event/Timeout: {}s", duration);
 
-        let data: EventSignal = match recv.recv_timeout(Duration::from_secs(duration.unwrap() as u64)) {
-            Ok(D) => D,
-            Err(_) => {
+        match recv.recv_timeout(Duration::from_secs(duration)) {
+            Ok(EventSig) => match EventSig.event_type {
+                Command::List => listEvent(&config, EventSig.channel_id, &http), 
+                Command::Delete => deleteEvent(&mut config, &http, &EventSig),
+                Command::Create => createEvent(&mut config, &http, &EventSig),
+                Command::Subscribe => subscribeEvent(&mut config, &EventSig, &http),
+                Command::Unsubscribe => unsubscribeEvent(&mut config, &EventSig, &http),
+                Command::Channel => channelEvent(&mut config, EventSig.channel_id, &http),
+                Command::Invalid => continue,
+            },
+            Err(RecvTimeoutError::Timeout) => {
                 println!("Timeout!");
                 activateEvent(&mut config, &http);
                 continue; 
+            },
+            Err(e) => {
+                println!("Error while recv: {:?}", e);
             }
         };
-
-
-        match data.event_type {
-            Command::List => listEvent(&config, data.channel_id, &http), 
-            Command::Delete => deleteEvent(&mut config, &http, &data),
-            Command::Create => createEvent(&mut config, &http, &data),
-            Command::Subscribe => subscribeEvent(&mut config, &data, &http),
-            Command::Unsubscribe => unsubscribeEvent(&mut config, &data, &http),
-            Command::Channel => channelEvent(&mut config, data.channel_id, &http),
-            Command::Invalid => continue,
-        }
-
     }
 
 }
